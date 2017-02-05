@@ -41,6 +41,7 @@ struct FileData
     ~FileData();
 
     void CalcHash(char const * const in_pPath); //вычислить хэш файла
+    void SetName(char const * const in_pName); //сменить имя файла
 
 private:
     //задать имя файла и определить его тип
@@ -59,6 +60,8 @@ struct SnapshotComparison
     SnapshotComparison();
     SnapshotComparison(FileData * const in_pfdFile, ResultOfCompare in_rocResult);
     ~SnapshotComparison();
+
+    void CopyResult(SnapshotComparison const * const in_pscSnapshotResult);
 };
 
 // "слепок" директории (двунаправленный список всех файлов данной директории)
@@ -81,12 +84,17 @@ public:
     FileData *AddFile(char const * const in_pName, char *in_pPath, bool in_fCaclHash); //добавить файл в список
     FileData *AddFile(FileData const * const in_pName, char const * const in_pPath, bool in_fCaclHash); //добавить файл в список
     void SubFile(char const * const in_pName); //удалить файл из списка
+    void SubFile(int nInode); //удалить файл из списка по его inode
+    void RenameFile(FileData const * const in_pfdData); //переименовать файл
 
-    ResultOfCompare CompareSnapshots(DirSnapshot *in_pdsRemake, SnapshotComparison *out_pscResult, bool in_fHash);
-    FileData *IsDataIncluded(DirSnapshot *in_pdsSubset, DirSnapshot *in_pdsSet, bool in_fHash);
+    void CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash);
+    void IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot * const in_pdsSet, bool in_fHash);
+    void ClearResult(void); //удалить прежний результат сравнения слепков
 
     void AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocResult); //добавить результат сравнения в список
-    SnapshotComparison *GetResult(void); //получить следующий результат сравнения и удалить его из списка
+    void GetResult(SnapshotComparison * const out_pscResult); //получить следующий результат сравнения и удалить его из списка
+    bool IsResultEmpty(void); //найдены отличия или нет?
 
     void PrintSnapshot(void); //отладка!!!
+    void PrintComparison(void); //отладка!!!
 };

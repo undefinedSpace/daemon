@@ -12,6 +12,9 @@
 DirSnapshot::DirSnapshot()
 {
     pfdFirst = new FileData();
+    pscFirst = NULL;
+    mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
+    mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
 }
 
 //функция не подходит для создания конечного слепка директории, т.к.
@@ -21,6 +24,9 @@ DirSnapshot::DirSnapshot(char const * const in_pName)
     DIR *dFd;
     FileData *pfdFile;
     struct dirent *pdeData;
+
+    mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
+    mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
 
     pfdFirst = new FileData();
 
@@ -66,7 +72,11 @@ DirSnapshot::DirSnapshot(FileData * const in_pfdParent)
     FileData *pfdFile;
     struct dirent *pdeData;
 
+    mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
+    mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
+
     pfdFirst = new FileData();
+    pscFirst = NULL;
 
     //тут должен быть автоматически создан весь слепок
     //путём чтения текущей директории
@@ -113,7 +123,11 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
     struct dirent *pdeData;
     SomeDirectory *psdParent, *psdAdd;
 
+    mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
+    mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
+
     pfdFirst = new FileData();
+    pscFirst = NULL;
 
     //тут должен быть автоматически создан весь слепок
     //путём чтения текущей директории
@@ -226,12 +240,13 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 
 DirSnapshot::~DirSnapshot()
 {
-    SnapshotComparison *pscList;
+    SnapshotComparison *pscList, *pscDel;
 
     //если список файлов пуст - выходим
     if(pfdFirst == NULL)
 	return;
 
+    pthread_mutex_lock(&mSnapshotList);
     //удаляем элементы списка
     while(pfdFirst->pfdNext != NULL)
     {
@@ -240,18 +255,22 @@ DirSnapshot::~DirSnapshot()
     //удаляем первый элемент списка
     delete pfdFirst;
     pfdFirst = NULL;
+    pthread_mutex_unlock(&mSnapshotList);
 
+    pthread_mutex_lock(&mComparisonResultList);
     //удаляем результат сравнения слепков (если он есть)
-    if(pscFirst != NULL)
+    pscList = pscDel = pscFirst;
+    while(pscList != NULL)
     {
-      pscList = GetResult();
-      while(pscList != NULL)
-      {
-	delete pscList;
-	pscList = GetResult();
-      }
-      delete pscFirst;
+      pscList = pscDel->pscNext;
+      delete pscDel;
+      pscDel = pscList;
     }
+    pscFirst = NULL;
+    pthread_mutex_unlock(&mComparisonResultList);
+
+    pthread_mutex_destroy(&mSnapshotList);
+    pthread_mutex_destroy(&mComparisonResultList);
 }
 
 //добавляем файл в список
@@ -266,6 +285,7 @@ FileData *DirSnapshot::AddFile(char const * const in_pName, char *in_pPath, bool
     if(in_pName == NULL || strlen(in_pName) <= 0)
 	return NULL;
 
+    pthread_mutex_lock(&mSnapshotList);
     //если список ещё пуст
     if(pfdFirst == NULL)
 	pfdFirst = new FileData();
@@ -298,14 +318,17 @@ FileData *DirSnapshot::AddFile(char const * const in_pName, char *in_pPath, bool
       //добавляем файл в конец списка
       pfdList->pfdNext = new FileData(in_pName, in_pPath, pfdList, in_fCalcHash);
       delete [] pFullPath;
+      pthread_mutex_unlock(&mSnapshotList);
       return (pfdList->pfdNext);
     }
     else
     {
 //       fprintf(stderr, "DirSnapshot::AddFile() : \"%s\"\n", pFullPath); //отладка!!!
       delete [] pFullPath;
+      pthread_mutex_unlock(&mSnapshotList);
       return NULL;
     }
+    pthread_mutex_unlock(&mSnapshotList);
 }
 
 //добавляем файл в список
@@ -314,13 +337,17 @@ FileData *DirSnapshot::AddFile(FileData const * const in_pfdFile, char const * c
     struct FileData *pfdList;
     FileData *pfdCopy;
 
+    pthread_mutex_lock(&mSnapshotList);
     //если список ещё пуст
     if(pfdFirst == NULL)
 	pfdFirst = new FileData();
 
     //проверка
     if(in_pPath == NULL)
+    {
+      pthread_mutex_unlock(&mSnapshotList);
       return NULL;
+    }
 
     //ищем последний элемент списка
     pfdList = pfdFirst;
@@ -338,6 +365,7 @@ FileData *DirSnapshot::AddFile(FileData const * const in_pfdFile, char const * c
     pfdCopy->pfdPrev = pfdList;
     pfdCopy->pfdNext = NULL;
 
+    pthread_mutex_unlock(&mSnapshotList);
     return pfdList->pfdNext;
 }
 
@@ -354,6 +382,7 @@ void DirSnapshot::SubFile(char const * const in_pName)
     if(in_pName == NULL || strlen(in_pName) <= 0)
 	return;
 
+    pthread_mutex_lock(&mSnapshotList);
     //ищем файл в списке по указанному имени
     pfdList = pfdFirst;
     while(pfdList != NULL && strcmp(pfdList->pName, in_pName) != 0)
@@ -363,84 +392,113 @@ void DirSnapshot::SubFile(char const * const in_pName)
 
     //если такой файл не найден в списке - выходим
     if(pfdList == NULL)
+    {
+	pthread_mutex_unlock(&mSnapshotList);
 	return;
+    }
 
     //удаляем файл из списка
     delete pfdList;
+
+    pthread_mutex_unlock(&mSnapshotList);
+}
+
+//удаляем файл из слепка по его inode
+void DirSnapshot::SubFile(int in_nInode)
+{
+    struct FileData *pfdList;
+
+    if(pfdFirst == NULL)
+	return;
+
+    pthread_mutex_lock(&mSnapshotList);
+    //ищем файл в списке по указанному имени
+    pfdList = pfdFirst;
+    while(pfdList != NULL && pfdList->stData.st_ino != in_nInode)
+    {
+	pfdList = pfdList->pfdNext;
+    }
+
+    //если такой файл не найден в списке - выходим
+    if(pfdList == NULL)
+    {
+	pthread_mutex_unlock(&mSnapshotList);
+	return;
+    }
+
+    //удаляем файл из списка
+    delete pfdList;
+
+    pthread_mutex_unlock(&mSnapshotList);
+}
+
+//переименовать файл в слепке
+void DirSnapshot::RenameFile(FileData const * const in_pfdData)
+{
+    struct FileData *pfdList;
+
+    if(pfdFirst == NULL)
+	return;
+
+    pthread_mutex_lock(&mSnapshotList);
+    pfdList = pfdFirst;
+    while(pfdList != NULL && pfdList->stData.st_ino != in_pfdData->stData.st_ino)
+    {
+	pfdList = pfdList->pfdNext;
+    }
+
+    //если не найден
+    if(pfdList == NULL)
+    {
+	pthread_mutex_unlock(&mSnapshotList);
+	return;
+    }
+    //переименовываем
+    pfdList->SetName(in_pfdData->pName);
+    pthread_mutex_unlock(&mSnapshotList);
 }
 
 //требуется переработать для поиска всех отличий сразу, а не по одному за вызов (!)
-ResultOfCompare DirSnapshot::CompareSnapshots(DirSnapshot *in_pdsRemake, SnapshotComparison *out_pscResult, bool in_fHash)
+void DirSnapshot::CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash)
 {
-  FileData *pfdResult;
-
-//   fprintf(stderr, "DirSnapshot::CompareSnapshots() , список всех директорий:\n"); //отладка!!!
-//   RootMonitor::pdlList->PrintList(); //отладка!!!
-  //судя по всему, где-то не задаётся или сбрасывается родительская директория (i)
-  //или удаляется родительская директория вместо дочерней (i)
-  //или плохо удаляется директория из слепка, либо вообще не удаляется (i)
-//   fprintf(stderr, "DirSnapshot::CompareSnapshots() , сравниваются слепки 1:\n"); //отладка!!!
-//   PrintSnapshot(); //отладка!!!
-//   fprintf(stderr, "DirSnapshot::CompareSnapshots() , 2:\n"); //отладка!!!
-//   in_pdsRemake->PrintSnapshot(); //отладка!!!
-
-  //если уже существует первоначальный слепок, и он пустой
-  if(pfdFirst == NULL)
-  {
-    //если существует новый слепок, и он не пустой
-    if(in_pdsRemake != NULL && in_pdsRemake->pfdFirst != NULL && in_pdsRemake->pfdFirst->pfdNext != NULL)
-    {
-      //смотрим, есть ли в старом слепке все файлы из нового
-      pfdResult = IsDataIncluded(in_pdsRemake, this, in_fHash);
-      //если найден файл, которого нет в старом слепке, но который присутствует в новом
-      if(pfdResult != NULL)
-      {
-	//значит в этой папке был создан новый файл
-	out_pscResult->rocResult = IS_CREATED;
-	out_pscResult->pfdData = pfdResult;
-	return IS_CREATED;
-      }
-      else
-	return IS_EMPTY;
-    }
-    else
-      return IS_EMPTY;
-  }
-
-  if(in_pdsRemake == NULL)
-    return INPUT_IS_EMPTY;
-
-  if(out_pscResult == NULL)
-    return OUTPUT_IS_EMPTY;
-
-  //смотрим, есть ли в новом слепке все файлы из старого слепка
-  pfdResult = IsDataIncluded(this, in_pdsRemake, in_fHash);
-  if(pfdResult != NULL)
-  {
-    //если какого-то файла нет в новом слепке, значит он был удалён из директории
-    out_pscResult->rocResult = IS_DELETED;
-    out_pscResult->pfdData = pfdResult;
-    return IS_DELETED;
-  }
-
-  //смотрим, есть ли в старом слепке все файлы из нового слепка
-  pfdResult = IsDataIncluded(in_pdsRemake, this, in_fHash);
-  if(pfdResult != NULL)
-  {
-    //если в старом слепке какой-то файл не найден, значит он был создан в директории
-    out_pscResult->rocResult = IS_CREATED;
-    out_pscResult->pfdData = pfdResult;
-    return IS_CREATED;
-  }
-
-  return IS_EQUAL;
+  IsDataIncluded(this, in_pdsRemake, in_fHash);
 }
 
-//если Subset является частью Set, возвращаем NULL
-//если Subset больше Set, возвращается ссылка на файл, которого нету в Set
-FileData *DirSnapshot::IsDataIncluded(DirSnapshot *in_pdsSubset, DirSnapshot *in_pdsSet, bool in_fHash)
+//инициализируем список отличий в текущем объекте слепка
+void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot * const in_pdsSet, bool in_fHash)
 {
-  FileData *pfdListSubset, *pfdListSet;
+  FileData *pfdListSubset = NULL, *pfdListSet = NULL;
+
+  //начальная проверка
+  if(in_pdsSubset == NULL)
+    return;
+
+  //если новый слепок не создался
+  if(in_pdsSet == NULL)
+  {
+    //добавляем сообщение об ошибке и выходим
+    in_pdsSubset->AddResult(NULL, NO_SNAPSHOT);
+    return;
+  }
+
+  //если прежний слепок не создан, возвращаем ошибку "нет слепка"
+  if(in_pdsSubset->pfdFirst == NULL)
+  {
+    //добавляем сообщение об ошибке и выходим
+    in_pdsSubset->AddResult(NULL, IS_EMPTY);
+    return;
+  }
+  //если новый слепок пустой, сообщаем об ошибке
+  if(in_pdsSet->pfdFirst == NULL)
+  {
+    //сообщаем о том, что новый слепок не был создан
+    in_pdsSubset->AddResult(NULL, INPUT_IS_EMPTY);
+    return;
+  }
+  //удаляем прежний результат сравнения
+  in_pdsSubset->ClearResult();
+
+  //1) получаем результат вычетания второго слепка из первого (IS_DELETED)
 
   //перебираем все файлы первого слепка
   pfdListSubset = in_pdsSubset->pfdFirst->pfdNext;
@@ -450,46 +508,115 @@ FileData *DirSnapshot::IsDataIncluded(DirSnapshot *in_pdsSubset, DirSnapshot *in
     pfdListSet = in_pdsSet->pfdFirst->pfdNext;
     while(pfdListSet != NULL)
     {
-      //если имена файлов совпадает - переключаем файл первого слепка на следующий
-//       if(strcmp(pfdListSubset->pName, pfdListSet->pName) == 0)
-// 	break;
       //если совпадают inode (либо ulCrc) - переключаем файл первого слепка на следующий
       //нужно ещё добавить сравнение по именам+inode (для поиска переименований) и как-то сообщать о результате (!)
-      if(in_fHash)
+      if( in_fHash && pfdListSubset->nType != IS_NOTAFILE && pfdListSet->nType != IS_NOTAFILE )
       {
-	//сравниваем хэши файлов
-	if( pfdListSubset->nType != IS_NOTAFILE && 
-	    pfdListSet->nType != IS_NOTAFILE && 
-	    pfdListSubset->ulCrc == pfdListSet->ulCrc )
+	//проверяем, не директории ли, и сравниваем хэши этих файлов
+	if( pfdListSubset->nType != IS_DIRECTORY &&
+	    pfdListSet->nType != IS_DIRECTORY &&
+	    pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
+	{
+	  if( pfdListSubset->ulCrc != pfdListSet->ulCrc )
+	  {
+	    //хэши старого и нового слепков отличаются - файл изменён
+	    //добавляем новый файл в список отличий
+	    in_pdsSubset->AddResult(pfdListSet, NEW_HASH);
+	  }
+	  //переходим к следующему файлу в первом слепке
 	  break;
+	}
       }
       else
       {
 	//сравниваем inode файлов
-	if( pfdListSubset->nType != IS_NOTAFILE && 
-	    pfdListSet->nType != IS_NOTAFILE && 
-	    pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
+	if( pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
+	{
+	  //если имена файлов не совпадают
+	  if(strcmp(pfdListSubset->pName, pfdListSet->pName) != 0)
+	  {
+	    //добавляем файл из нового слепка в список отличий
+	    in_pdsSubset->AddResult(pfdListSet, NEW_NAME);
+	  }
+	  //переключаем файл первого слепка на следующий
 	  break;
+	}
       }
       pfdListSet = pfdListSet->pfdNext;
     }
-    //если достигнут конец первого слепка, и какой-то файл из него не найден во втором слепке,
-    //возвращаем ссылку на этот файл
-    //имеет смысл создавать третий слепок для возврата найденных различий между слепками (чисто список файлов) (!)
+    //если достигнут конец второго слепка, и какой-то файл из первого слепка в нём не найден
     if(pfdListSet == NULL)
-      return pfdListSubset;
+    {
+      //добавляем этот файл в список отличий
+      in_pdsSubset->AddResult(pfdListSubset, IS_DELETED);
+    }
     //берём следующий файл из первого слепка для поиска во втором слепке
     pfdListSubset = pfdListSubset->pfdNext;
   }
 
-  return NULL;
+  //2) получаем результат вычетания первого слепка из второго (IS_CREATED)
+  //   хэш при этом проверять уже не имеет смысла
+  
+  //перебираем все файлы второго слепка
+  pfdListSet = in_pdsSet->pfdFirst->pfdNext;
+  while(pfdListSet != NULL)
+  {
+    //перебираем все файлы первого слепка
+    pfdListSubset = in_pdsSubset->pfdFirst->pfdNext;
+    while(pfdListSubset != NULL)
+    {
+      //если сравниваются файлы или директории
+      if( pfdListSet->nType != IS_NOTAFILE && pfdListSubset->nType != IS_NOTAFILE )
+      {
+	//сравниваем inode файлов
+	if( pfdListSet->stData.st_ino == pfdListSubset->stData.st_ino )
+	{
+	  break;
+	}
+      }
+
+      //переходим к следующему файлу из первого слепка для сравнения с ним
+      pfdListSubset = pfdListSubset->pfdNext;
+    }
+
+    //если достигли конца первого слепка, но файла из второго слепка так и не нашли - значит, это новый файл
+    if(pfdListSubset == NULL)
+    {
+      //добавляем этот файл к списку отличий
+      in_pdsSubset->AddResult(pfdListSet, IS_CREATED);
+    }
+
+    //берём следующий файл из второго слепка
+    pfdListSet = pfdListSet->pfdNext;
+  }
+
+  if(in_pdsSubset->IsResultEmpty())
+    in_pdsSubset->AddResult(NULL, IS_EQUAL);
 }
 
+//удаляем всё из списка отличий двух слепков
+void DirSnapshot::ClearResult(void)
+{
+  SnapshotComparison *pscList, *pscDel;
+
+//   pthread_mutex_lock(&mComparisonResultList);
+  pscList = pscDel = pscFirst;
+  while(pscList != NULL)	
+  {
+    pscList = pscList->pscNext;
+    delete pscDel;
+    pscDel = pscList;
+  }
+  pscFirst = NULL;
+//   pthread_mutex_unlock(&mComparisonResultList);
+}
+
+//добавить результат сравнения двух файлов
 void DirSnapshot::AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocResult)
 {
   SnapshotComparison *pscList;
 
-  pthread_mutex_lock(&mComparisonResultList);
+   pthread_mutex_lock(&mComparisonResultList);
   if(pscFirst == NULL)
     pscFirst = new SnapshotComparison();
 
@@ -500,27 +627,51 @@ void DirSnapshot::AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocR
   }
 
   pscList->pscNext = new SnapshotComparison(in_pfdFile, in_rocResult);
+
+//   if(in_pfdFile != NULL) //отладка!!!
+//     fprintf(stderr, "DirSnapshot::AddResult() : name=\"%s\"\n", in_pfdFile->pName); //отладка!!!
+//   else //отладка!!!
+//     fprintf(stderr, "DirSnapshot::AddResult() : in_pfdFile=NULL\n"); //отладка!!!
+
+   pthread_mutex_unlock(&mComparisonResultList);
+}
+
+//получить последнее отличие
+void DirSnapshot::GetResult(SnapshotComparison * const out_pscResult)
+{
+  SnapshotComparison *pscDel;
+
+  if(out_pscResult == NULL)
+  {
+    fprintf(stderr, "DirSnapshot::GetResult() : out_pscResult is NULL!\n");
+    return;
+  }
+  //если список не инициализирован или пустой - возвращаем NULL
+  if(pscFirst == NULL || pscFirst->pscNext == NULL)
+  {
+    out_pscResult->CopyResult(NULL);
+    return;
+  }
+
+  pthread_mutex_lock(&mComparisonResultList);
+  //возвращаем копию первого отличия сравнения двух слепков
+  out_pscResult->CopyResult(pscFirst->pscNext);
+  pscDel = pscFirst->pscNext;
+  if(pscDel != NULL)
+  {
+    pscFirst->pscNext = pscDel->pscNext;
+    delete pscDel;
+  }
   pthread_mutex_unlock(&mComparisonResultList);
 }
 
-//после вызова функции и обработки результата требуется удалить объект, ссылка на который возвращается данным методом (!)
-SnapshotComparison *DirSnapshot::GetResult(void)
+//пустой результат сравнения или нет
+bool DirSnapshot::IsResultEmpty(void)
 {
-  SnapshotComparison *pscRet;
-
-  //если список не инициализирован или пустой - возвращаем NULL
   if(pscFirst == NULL || pscFirst->pscNext == NULL)
-    return NULL;
-
-  pthread_mutex_lock(&mComparisonResultList);
-  //выносим первый элемент за пределы списка результатов сравнения двух слепков
-  pscRet = pscFirst;
-  pscFirst = pscFirst->pscNext;
-  pscRet->pscNext = NULL;
-  pthread_mutex_unlock(&mComparisonResultList);
-  //возвращаем ссылку на вынесенный из списка результатов сравнения двух слепков элемент
-  //после обработки требуется удалить этот объект (!)
-  return pscRet;
+    return true;
+  else
+    return false;
 }
 
 //вывести содержимое директории
@@ -531,8 +682,27 @@ void DirSnapshot::PrintSnapshot(void)
   pfdList = pfdFirst;
   while(pfdList != NULL)
   {
-    fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s\n", pfdList->pName);
+    if(pfdList->nType == IS_DIRECTORY)
+      fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s\n", pfdList->pName);
+    else
+      fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s, inode=%d, crc=0x%x\n", pfdList->pName, (int)pfdList->stData.st_ino, (int)pfdList->ulCrc);
     pfdList = pfdList->pfdNext;
+  }
+}
+
+//вывести результат сравнения слепков
+void DirSnapshot::PrintComparison(void)
+{
+  SnapshotComparison *pscList;
+
+  pscList = pscFirst;
+  while(pscList != NULL)
+  {
+    if(pscList->pfdData != NULL && pscList->pfdData->pName != NULL)
+      fprintf(stderr, "DirSnapshot::PrintComparison() : \"%s\", %d\n", pscList->pfdData->pName, pscList->rocResult);
+    else
+      fprintf(stderr, "DirSnapshot::PrintComparison() : NULL, %d\n", pscList->rocResult);
+    pscList = pscList->pscNext;
   }
 }
 
@@ -555,6 +725,9 @@ FileData::FileData()
 
 FileData::FileData(char const * const in_pName, char *in_pPath, struct FileData * const in_pfdPrev, bool in_fCalcHash)
 {
+    pfdNext = NULL;
+    pfdPrev = NULL;
+
     SetFileData(in_pName, in_pPath, in_fCalcHash);
     pfdPrev = in_pfdPrev;
 
@@ -785,6 +958,21 @@ void FileData::SetFileData(char const * const in_pName, char *in_pPath, bool in_
       delete [] pPath;
 }
 
+void FileData::SetName(char const * const in_pName)
+{
+    size_t stLen;
+
+    if(in_pName == NULL || (stLen = strlen(in_pName)) == 0)
+	return;
+
+    if(pName != NULL)
+	delete [] pName;
+
+    pName = new char[stLen + 1];
+    memset(pName, 0, stLen + 1);
+    strncpy(pName, in_pName, stLen);
+}
+
 char const * const FileData::GetName()
 {
     return pName;
@@ -810,4 +998,19 @@ SnapshotComparison::~SnapshotComparison()
 {
     rocResult = IS_EMPTY;
     pfdData = NULL;
+}
+
+//копия
+void SnapshotComparison::CopyResult(SnapshotComparison const * const in_pscSnapshotResult)
+{
+    if(in_pscSnapshotResult == NULL)
+    {
+	rocResult = IS_EMPTY;
+	pfdData = NULL;
+	pscNext = NULL;
+	return;
+    }
+    rocResult = in_pscSnapshotResult->rocResult;
+    pfdData = in_pscSnapshotResult->pfdData;
+    pscNext = NULL;
 }
