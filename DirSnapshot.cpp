@@ -161,11 +161,9 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 	    psdParent->GetFileData()->nType = IS_NOTAFILE;
 	    break;
 	}
-
 // 	if(nFd == -1)
 // 	  perror("DirSnapshot::DirSnapshot() open directory");
-
-	  //учесть при инкапсуляции (!)
+	//учесть при инкапсуляции (!)
 	psdParent->GetFileData()->nDirFd = nFd;
       }
 //       fprintf(stderr, "DirSnapshot::DirSnapshot() nFd=%d\n", nFd); //отладка!!!
@@ -203,16 +201,13 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 	    (strlen(pdeData->d_name) == 2 && strncmp(pdeData->d_name, "..", 2) == 0)) )
 	{
 	    pfdFile = AddFile(pdeData->d_name, pPath, in_fMakeHash); //сразу вычисляем хэш, если задано
-
 //  	    if(in_fUpdateDirList)
 //  	      fprintf(stderr, "DirSnapshot::DirSnapshot() 3:path: %s, %s\t%s, fd=%d, inode=%d\n", pPath, (pfdFile->nType==IS_DIRECTORY)?("DIR"):(""), pdeData->d_name, pfdFile->nDirFd, (int)pfdFile->stData.st_ino); //отладка!!!
-
 	    if(pfdFile == NULL)
 	    {
 		pdeData = readdir(dFd);
 		continue;
 	    }
-
 	    //если это директория - добавляем в список открытых дескрипторов
 	    //добавление происходит только при первичном создании слепка
 	    if(in_fUpdateDirList && pPath != NULL && pfdFile->nType == IS_DIRECTORY)
@@ -610,7 +605,7 @@ void DirSnapshot::ClearResult(void)
 {
   SnapshotComparison *pscList, *pscDel;
 
-//   pthread_mutex_lock(&mComparisonResultList);
+  pthread_mutex_lock(&mComparisonResultList);
   pscList = pscDel = pscFirst;
   while(pscList != NULL)	
   {
@@ -619,7 +614,7 @@ void DirSnapshot::ClearResult(void)
     pscDel = pscList;
   }
   pscFirst = NULL;
-//   pthread_mutex_unlock(&mComparisonResultList);
+  pthread_mutex_unlock(&mComparisonResultList);
 }
 
 //добавить результат сравнения двух файлов
@@ -627,7 +622,7 @@ void DirSnapshot::AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocR
 {
   SnapshotComparison *pscList;
 
-   pthread_mutex_lock(&mComparisonResultList);
+  pthread_mutex_lock(&mComparisonResultList);
   if(pscFirst == NULL)
     pscFirst = new SnapshotComparison();
 
@@ -639,12 +634,7 @@ void DirSnapshot::AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocR
 
   pscList->pscNext = new SnapshotComparison(in_pfdFile, in_rocResult);
 
-//   if(in_pfdFile != NULL) //отладка!!!
-//     fprintf(stderr, "DirSnapshot::AddResult() : name=\"%s\"\n", in_pfdFile->pName); //отладка!!!
-//   else //отладка!!!
-//     fprintf(stderr, "DirSnapshot::AddResult() : in_pfdFile=NULL\n"); //отладка!!!
-
-   pthread_mutex_unlock(&mComparisonResultList);
+  pthread_mutex_unlock(&mComparisonResultList);
 }
 
 //получить последнее отличие
@@ -814,9 +804,6 @@ FileData::~FileData()
 	pfdNext->pfdPrev = pfdPrev;
     if(pName != NULL)
     {
-// 	if(strcmp(pName, "123") == 0) //отладка!!!
-// 	fprintf(stderr, "FileData::~FileData() : delete \"%s\"\n", pName); //отладка!!!
-
 	delete [] pName;
 	pName = NULL;
     }
@@ -898,7 +885,6 @@ void FileData::SetFileData(char const * const in_pName, char *in_pPath, bool in_
 	strncat(pPath, "/", stLen);
       }
       strncat(pPath, in_pName, stLen);
-//       fprintf(stderr, "FileData::SetFileData() : %s\n", pPath); //отладка!!!
     }
 
     //если имя указано неверно - создаём пустой элемент списка (?)
@@ -937,8 +923,6 @@ void FileData::SetFileData(char const * const in_pName, char *in_pPath, bool in_
 
     //описание файла
     memcpy(&stData, &st, sizeof(st));
-
-//     fprintf(stderr, "FileData::SetFileData() : %s, inode=%d, %d\n", pPath, (int)st.st_ino, (int)stData.st_ino); //отладка!!!
 
     //хэш
     //memset(szHash, 0, sizeof(szHash));

@@ -53,9 +53,6 @@ SomeDirectory::SomeDirectory(char const * const in_pName, SomeDirectory * const 
 
     if(pPath != NULL)
       delete [] pPath;
-    
-    //создаём слепок директории (но не обязательно тут)
-    //...
 }
 
 //этот конструктор автоматически открывает директорию
@@ -120,11 +117,6 @@ SomeDirectory::~SomeDirectory()
     //удаляем слепок текущей директории
     if(pdsSnapshot != NULL)
       delete pdsSnapshot;
-//     if(psdParent != NULL) //отладка!!!
-//     {
-//       fprintf(stderr, "SomeDirectory::~SomeDirectory() : printing snapshot:\n"); //отладка!!!
-//       psdParent->PrintSnapshot(); //отладка!!!
-//     }
     //удаляем директорию из слепка родительской директории
     if(pfdData != NULL)
     {
@@ -267,7 +259,6 @@ void SomeDirectory::CompareSnapshots(void)
     fSecondResult = false;
     //производим сравнение
     pdsSnapshot->CompareSnapshots(pdsRemake, false);
-//     fprintf(stderr, "SomeDirectory::CompareSnapshots() scResult.pfdData->pName: \"%s\"\n", scResult.pfdData->pName); //отладка!!!
 
     //получаем первое отличие
     pdsSnapshot->GetResult(&scResult);
@@ -377,11 +368,6 @@ void SomeDirectory::CompareSnapshots(void)
 
 	    break;
 	  case IS_EQUAL:
-	    if(fSecondResult)
-	    {
-	      //если слепки уже сравнивались по хэшу, и всё равно различий не найдено - уходим
-	      break;
-	    }
 	    break;
 	}
 

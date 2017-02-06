@@ -45,10 +45,5 @@ public:
     RootMonitor(SomeDirectory * const in_psdRootDirectory);
     ~RootMonitor();
 
-    //основные функции, требуемые потоками обработки дескрипторов
-    //такие как обновление списка директорий, дерева файлов,
-    //создание временных слепков для сравнения, само сравнение
-    //...
-
     int SetRootPath(char const * const SetNewRootPath); //сменить путь к проекту
 };
