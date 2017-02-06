@@ -461,7 +461,15 @@ void DirSnapshot::RenameFile(FileData const * const in_pfdData)
 //требуется переработать для поиска всех отличий сразу, а не по одному за вызов (!)
 void DirSnapshot::CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash)
 {
+//   fprintf(stderr, "DirSnapshot::CompareSnapshots() : main snapshot:\n"); //отладка!!!
+//   PrintSnapshot(); //отладка!!!
+//   fprintf(stderr, "DirSnapshot::CompareSnapshots() : remake snapshot:\n"); //отладка!!!
+//   in_pdsRemake->PrintSnapshot(); //отладка!!!
+
   IsDataIncluded(this, in_pdsRemake, in_fHash);
+
+//   fprintf(stderr, "DirSnapshot::CompareSnapshots() : result of compare:\n"); //отладка!!!
+//   PrintComparison(); //отладка!!!
 }
 
 //инициализируем список отличий в текущем объекте слепка
@@ -472,6 +480,9 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
   //начальная проверка
   if(in_pdsSubset == NULL)
     return;
+
+  //удаляем прежний результат сравнения
+  in_pdsSubset->ClearResult();
 
   //если новый слепок не создался
   if(in_pdsSet == NULL)
@@ -495,8 +506,6 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
     in_pdsSubset->AddResult(NULL, INPUT_IS_EMPTY);
     return;
   }
-  //удаляем прежний результат сравнения
-  in_pdsSubset->ClearResult();
 
   //1) получаем результат вычетания второго слепка из первого (IS_DELETED)
 
@@ -510,42 +519,44 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
     {
       //если совпадают inode (либо ulCrc) - переключаем файл первого слепка на следующий
       //нужно ещё добавить сравнение по именам+inode (для поиска переименований) и как-то сообщать о результате (!)
-      if( in_fHash && pfdListSubset->nType != IS_NOTAFILE && pfdListSet->nType != IS_NOTAFILE )
+      if( pfdListSubset->nType != IS_NOTAFILE && pfdListSet->nType != IS_NOTAFILE )
       {
-	//проверяем, не директории ли, и сравниваем хэши этих файлов
-	if( pfdListSubset->nType != IS_DIRECTORY &&
-	    pfdListSet->nType != IS_DIRECTORY &&
-	    pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
+	//проверяем, не директории ли
+	if( in_fHash && pfdListSubset->nType != IS_DIRECTORY )
 	{
-	  if( pfdListSubset->ulCrc != pfdListSet->ulCrc )
+	  //сравниваем хэши этих файлов
+	  if( pfdListSet->nType != IS_DIRECTORY && pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
 	  {
-	    //хэши старого и нового слепков отличаются - файл изменён
-	    //добавляем новый файл в список отличий
-	    in_pdsSubset->AddResult(pfdListSet, NEW_HASH);
+	    if( pfdListSubset->ulCrc != pfdListSet->ulCrc )
+	    {
+	      //хэши старого и нового слепков отличаются - файл изменён
+	      //добавляем новый файл в список отличий
+	      in_pdsSubset->AddResult(pfdListSet, NEW_HASH);
+	    }
+	    //переходим к следующему файлу в первом слепке
+	    break;
 	  }
-	  //переходим к следующему файлу в первом слепке
-	  break;
 	}
-      }
-      else
-      {
-	//сравниваем inode файлов
-	if( pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
+	else
 	{
-	  //если имена файлов не совпадают
-	  if(strcmp(pfdListSubset->pName, pfdListSet->pName) != 0)
+	  //сравниваем inode файлов
+	  if( pfdListSubset->stData.st_ino == pfdListSet->stData.st_ino )
 	  {
-	    //добавляем файл из нового слепка в список отличий
-	    in_pdsSubset->AddResult(pfdListSet, NEW_NAME);
+	    //если имена файлов не совпадают
+	    if(strcmp(pfdListSubset->pName, pfdListSet->pName) != 0)
+	    {
+	      //добавляем файл из нового слепка в список отличий
+	      in_pdsSubset->AddResult(pfdListSet, NEW_NAME);
+	    }
+	    //переключаем файл первого слепка на следующий
+	    break;
 	  }
-	  //переключаем файл первого слепка на следующий
-	  break;
 	}
       }
       pfdListSet = pfdListSet->pfdNext;
     }
     //если достигнут конец второго слепка, и какой-то файл из первого слепка в нём не найден
-    if(pfdListSet == NULL)
+    if(pfdListSet == NULL && pfdListSubset != NULL && pfdListSubset->nType != IS_NOTAFILE)
     {
       //добавляем этот файл в список отличий
       in_pdsSubset->AddResult(pfdListSubset, IS_DELETED);
@@ -556,7 +567,7 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
 
   //2) получаем результат вычетания первого слепка из второго (IS_CREATED)
   //   хэш при этом проверять уже не имеет смысла
-  
+
   //перебираем все файлы второго слепка
   pfdListSet = in_pdsSet->pfdFirst->pfdNext;
   while(pfdListSet != NULL)
@@ -580,7 +591,7 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
     }
 
     //если достигли конца первого слепка, но файла из второго слепка так и не нашли - значит, это новый файл
-    if(pfdListSubset == NULL)
+    if(pfdListSubset == NULL && pfdListSet != NULL && pfdListSet->nType!= IS_NOTAFILE)
     {
       //добавляем этот файл к списку отличий
       in_pdsSubset->AddResult(pfdListSet, IS_CREATED);
@@ -683,7 +694,7 @@ void DirSnapshot::PrintSnapshot(void)
   while(pfdList != NULL)
   {
     if(pfdList->nType == IS_DIRECTORY)
-      fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s\n", pfdList->pName);
+      fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s, inode=%d\n", pfdList->pName, (int)pfdList->stData.st_ino);
     else
       fprintf(stderr, "DirSnapshot::PrintSnapshot() : %s, inode=%d, crc=0x%x\n", pfdList->pName, (int)pfdList->stData.st_ino, (int)pfdList->ulCrc);
     pfdList = pfdList->pfdNext;

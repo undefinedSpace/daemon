@@ -14,9 +14,11 @@
 #include<dirent.h> //opendir(), readdir()
 #include<stdlib.h>
 #include<pthread.h>
+#include<sys/time.h>
 #include<sys/stat.h>
 #include<sys/types.h>
 #include<sys/select.h>
+#include<sys/resource.h>
 
 #include"RootMonitor.h"
 
@@ -209,6 +211,15 @@ int main(int argc, char *argv[])
     pthread_attr_t attr;
     RootMonitor *rmProject;
     struct dirent *dir_val;
+    rlimit r;
+
+    //увеличиваем лимит открытых файлов для текущего процесса
+    r.rlim_cur = 8192;
+    r.rlim_max = 8192;
+    if(setrlimit(RLIMIT_NOFILE, &r) < 0)
+      perror("main(), setrlimit error:");
+    getrlimit(RLIMIT_NOFILE, &r);
+    fprintf(stderr, "main() : nofile limits: rlim_cur=%ld, rlim_max=%ld\n", r.rlim_cur, r.rlim_max);
 
     pthread_mutex_unlock(&(RootMonitor::mDescListMutex));
     pthread_mutex_unlock(&(RootMonitor::mDescQueueMutex));
@@ -242,7 +253,6 @@ int main(int argc, char *argv[])
 	//копируем имя файла
 	strncpy(filename, argv[i+1], sizeof(filename));
 
-	fprintf(stderr, "%s\n", filename);
 	//пытаемся открыть файл
 	rmProject = new RootMonitor(filename);
 	stat(filename, &st);
