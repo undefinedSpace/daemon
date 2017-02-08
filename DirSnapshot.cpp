@@ -6,6 +6,9 @@
 #include"DirSnapshot.h"
 #include"SomeDirectory.h"
 #include"RootMonitor.h"
+#include"JSONService.h"
+
+extern RootMonitor *rmProject;
 
 /*************************************DirSnapshot**********************************/
 
@@ -114,6 +117,7 @@ DirSnapshot::DirSnapshot(FileData * const in_pfdParent)
 */
 }
 
+//in_psdParent - та директория, для которой создаётся слепок
 DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_fUpdateDirList)
 {
     DIR *dFd;
@@ -201,6 +205,17 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 	    (strlen(pdeData->d_name) == 2 && strncmp(pdeData->d_name, "..", 2) == 0)) )
 	{
 	    pfdFile = AddFile(pdeData->d_name, pPath, in_fMakeHash); //сразу вычисляем хэш, если задано
+
+	    //добавляем полученный файл или директорию в инициализирующий список
+	    //в обычный список будут добавляться файлы непосредственно из обработчика отличий
+	    if(in_fUpdateDirList)
+	    {
+	      if(rmProject != NULL && psdParent->GetFileData() != NULL)
+		rmProject->AddInitChange(pfdFile, psdParent->GetFileData()->stData.st_ino);
+	      else
+		fprintf(stderr, "DirSnapshot::DirSnapshot() : error! rmProject=%ld\n", (unsigned long)rmProject);
+	    }
+
 //  	    if(in_fUpdateDirList)
 //  	      fprintf(stderr, "DirSnapshot::DirSnapshot() 3:path: %s, %s\t%s, fd=%d, inode=%d\n", pPath, (pfdFile->nType==IS_DIRECTORY)?("DIR"):(""), pdeData->d_name, pfdFile->nDirFd, (int)pfdFile->stData.st_ino); //отладка!!!
 	    if(pfdFile == NULL)
@@ -214,6 +229,7 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 	    {
 		//возможно, создание этого объекта следует перенести в pdlList->AddQueueElement() (?)
 		psdAdd = new SomeDirectory(pfdFile, psdParent, false);
+
 		//непосредственно добавление
 		pthread_mutex_lock(&(RootMonitor::mDescListMutex));
 		if(RootMonitor::pdlList != NULL)

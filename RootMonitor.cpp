@@ -16,10 +16,21 @@ RootMonitor::RootMonitor()
 {
     psdRootDirectory = NULL;
     pdlList = NULL;
+    pjsFirst = NULL;
+    ulLastSessionNumber = 0L;
+    ulRegularSessionNumber = 4096L;
+    pszServerURL = NULL;
+    sSocket = -1;
 }
 
 RootMonitor::RootMonitor(char * const pRootPath)
 {
+    pjsFirst = NULL;
+    ulLastSessionNumber = 0L;
+    ulRegularSessionNumber = 4096L;
+    pszServerURL = NULL;
+    sSocket = -1;
+
     if(pRootPath == NULL)
     {
 	psdRootDirectory = NULL;
@@ -32,6 +43,10 @@ RootMonitor::RootMonitor(char * const pRootPath)
 
     //создаём описание корневой директории
     psdRootDirectory = new SomeDirectory(pRootPath, NULL);
+
+    //создаём первый список событий (инициализирующий)
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     //этот список существует для упрощения поиска директории по её дескриптору
     if(pdlList == NULL)
@@ -50,6 +65,12 @@ RootMonitor::RootMonitor(char * const pRootPath)
 
 RootMonitor::RootMonitor(FileData * const in_pfdData)
 {
+    pjsFirst = NULL;
+    ulLastSessionNumber = 0L;
+    ulRegularSessionNumber = 4096L;
+    pszServerURL = NULL;
+    sSocket = -1;
+
     if(in_pfdData == NULL)
     {
 	psdRootDirectory = NULL;
@@ -60,8 +81,12 @@ RootMonitor::RootMonitor(FileData * const in_pfdData)
     if(pdqQueue == NULL)
 	pdqQueue = new DescriptorsQueue();
 
-    //создаём описание корневой дирекстории
+    //создаём описание корневой директории
     psdRootDirectory = new SomeDirectory(in_pfdData, NULL, true);
+
+    //создаём первый список событий (инициализирующий)
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     if(pdlList == NULL)
     {
@@ -79,6 +104,12 @@ RootMonitor::RootMonitor(FileData * const in_pfdData)
 
 RootMonitor::RootMonitor(SomeDirectory * const in_psdRootDirectory)
 {
+    pjsFirst = NULL;
+    ulLastSessionNumber = 0L;
+    ulRegularSessionNumber = 4096L;
+    pszServerURL = NULL;
+    sSocket = -1;
+
     if(in_psdRootDirectory == NULL)
     {
 	psdRootDirectory = NULL;
@@ -91,6 +122,10 @@ RootMonitor::RootMonitor(SomeDirectory * const in_psdRootDirectory)
 
     //инициализируем ссылку на описание корневой директории отслеживаемого проекта
     psdRootDirectory = in_psdRootDirectory;
+
+    //создаём первый список событий (инициализирующий)
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     if(pdlList == NULL)
     {
@@ -113,6 +148,79 @@ RootMonitor::~RootMonitor()
 //        delete pdlList;
 //    if(psdRootDirectory != NULL)
 //        delete psdRootDirectory;
+    DeleteJSONServices();
+    if(pszServerURL != NULL)
+      delete [] pszServerURL;
+    if(sSocket != -1)
+      close(sSocket);
+}
+
+void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, ResultOfCompare in_rocEvent, ino_t in_itParentInode)
+{
+  JSONService *pjsList, *pjsLast, *pjsBuff;
+
+  if(pjsFirst == NULL)
+    pjsFirst = new JSONService(in_stType, in_ulSessionNumber);
+
+  pjsList = pjsLast = pjsFirst;
+  while(pjsList != NULL)
+  {
+    pjsLast = pjsList;
+    if( ((pjsLast->GetSessionNumber()) == in_ulSessionNumber) && ((pjsLast->GetType()) == in_stType) )
+      break;
+    pjsList = pjsList->GetNext();
+  }
+
+  //pjsLast указывает либо на найденный сервис, либо на последний сервис в списке
+  if(pjsList == NULL)
+  {
+    pjsBuff = pjsLast->GetNext();
+    pjsList = new JSONService(in_stType, in_ulSessionNumber);
+    pjsLast->SetNext(pjsList);
+    pjsList->SetNext(pjsBuff);
+  }
+
+  pjsList->AddChange(in_stType, in_pfdFile, in_rocEvent, in_itParentInode);
+}
+
+//добавить в очередь инициализирующее событие для данного проекта
+void RootMonitor::AddInitChange(FileData * const in_pfdFile, ino_t in_itParentInode)
+{
+  AddChange(INIT_SERVICE, ulLastSessionNumber, in_pfdFile, IS_EQUAL, in_itParentInode);
+}
+
+//получить JSON конкретной сессии
+char * const RootMonitor::GetJSON(unsigned long in_ulSessionNumber)
+{
+  JSONService *pjsList;
+
+  if(pjsFirst == NULL)
+    return NULL;
+
+  pjsList = pjsFirst;
+  while(pjsList != NULL)
+  {
+    if((pjsList->GetSessionNumber()) == in_ulSessionNumber)
+      return (pjsList->GetJSON());
+    pjsList = pjsList->GetNext();
+  }
+
+  return NULL;
+}
+
+unsigned long RootMonitor::GetLastSessionNumber(void)
+{
+  return ulLastSessionNumber;
+}
+
+unsigned long RootMonitor::GetRegularSessionNumber(void)
+{
+  return ulRegularSessionNumber;
+}
+
+void RootMonitor::IncRegularSessionNumber(void)
+{
+  ulRegularSessionNumber++;
 }
 
 //поменять/установить путь к корневой директории
@@ -163,4 +271,48 @@ int RootMonitor::SetRootPath(char const * const in_pNewRootPath)
     strncpy(pSafeRootPath, in_pNewRootPath, stLen);
 */
     return 0;
+}
+
+void RootMonitor::DeleteJSONServices(void)
+{
+    JSONService *pjsList, *pjsDel;
+
+    pjsList = pjsDel = pjsFirst;
+    while(pjsList != NULL)
+    {
+	pjsList = pjsList->GetNext();
+	delete pjsDel;
+	pjsDel = pjsList;
+    }
+    pjsFirst = NULL;
+}
+
+//вывести содержимое списка с конкретным номером сессии
+void RootMonitor::PrintSession(unsigned long in_ulSessionNumber)
+{
+    JSONService *pjsList;
+    
+    pjsList = pjsFirst;
+    while(pjsList != NULL)
+    {
+	if((pjsList->GetSessionNumber()) == in_ulSessionNumber)
+	{
+	    pjsList->PrintService();
+	    return;
+	} 
+	pjsList = pjsList->GetNext();
+    }
+}
+
+//вывести содержимое списка с конкретным номером сессии
+void RootMonitor::PrintServices(void)
+{
+    JSONService *pjsList;
+    
+    pjsList = pjsFirst;
+    while(pjsList != NULL)
+    {
+	pjsList->PrintService();
+	pjsList = pjsList->GetNext();
+    }
 }

@@ -17,12 +17,23 @@
 #include"DescriptorsList.h"
 #include"SomeDirectory.h"
 #include"DirSnapshot.h"
+#include"JSONService.h"
 
 //все потоки обработчиков дескрипторов обращаются только к объекту этого класса (?)
 class RootMonitor
 {
     //корневая директория отслеживаемого проекта
     SomeDirectory *psdRootDirectory;
+
+    //список очередей изменений в формате JSON. Отправляются на удалённый сервер строго по порядку! (!)
+    JSONService *pjsFirst;
+
+    //номер последнего созданного списка событий
+    unsigned long ulLastSessionNumber;
+    unsigned long ulRegularSessionNumber;
+
+    char *pszServerURL; //URL адрес сервера
+    int sSocket; //сокет для отправки изменений на сервер
 
 public:
     //список всех дескрипторов открытых директорий отслеживаемого проекта
@@ -45,5 +56,22 @@ public:
     RootMonitor(SomeDirectory * const in_psdRootDirectory);
     ~RootMonitor();
 
+    //добавить изменение в список
+    void AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, ResultOfCompare in_rocEvent, ino_t in_itParentInode);
+    //добавить изменение в инициализирующий список
+    void AddInitChange(FileData * const in_pfdFile, ino_t in_itParentInode);
+    //добавить новый список изменений
+    void AddJSONService(ServiceType in_stType, unsigned long in_ulSessionNumber);
+    //получить готовый запрос в формате JSON
+    char * const GetJSON(unsigned long in_ulSessionNumber);
+
+    unsigned long GetLastSessionNumber(void); //получить номер последнего инициализирующего (?) списка
+    unsigned long GetRegularSessionNumber(void); //получить последний номер обычной сессии
+    void IncRegularSessionNumber(void); //увеличить номер последней обычной сессии
+
     int SetRootPath(char const * const SetNewRootPath); //сменить путь к проекту
+    void DeleteJSONServices(void); //удалить очереди изменений на отправку
+    
+    void PrintSession(unsigned long in_ulSessionNumber);
+    void PrintServices(void);
 };

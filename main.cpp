@@ -24,6 +24,8 @@
 
 #define THREAD_SLEEP_TIME 0
 
+RootMonitor *rmProject;
+
 void *fd_queue_thread(void *arg);
 
 //обработчик сигнала об изменении в некотором файле
@@ -179,7 +181,6 @@ int main(int argc, char *argv[])
     union sigval path;
     pthread_t thread;
     pthread_attr_t attr;
-    RootMonitor *rmProject;
     struct dirent *dir_val;
     rlimit r;
 
@@ -244,12 +245,19 @@ int main(int argc, char *argv[])
     pthread_create(&thread, &attr, directory_thread, NULL);
     pthread_attr_destroy(&attr);
 
-//     pthread_mutex_unlock(&(RootMonitor::mDirThreadMutex));
+//      pthread_mutex_unlock(&(RootMonitor::mDirThreadMutex));
 //     RootMonitor::pdlList->PrintList();
+
+    usleep(2000000); //отладка!!!
+    char *list; //отладка!!!
+    list = rmProject->GetJSON(rmProject->GetLastSessionNumber()); //отладка!!!
+    fprintf(stderr, "%s\n", (list==NULL)?"NULL":list); //отладка!!!
+    if(list != NULL) //отладка!!!
+      delete [] list; //отладка!!!
 
     for(;;)
     {
-	usleep(5000000);
+	usleep(70000000);
     }
 
     return 0;
