@@ -1,50 +1,192 @@
 {
-  "type": "folder",
-  "event":"IS_EQUAL",
-  "name": "versions",
-  "inode": "555",
-  "time":"1486469322",
+  "type":"folder",
+  "event":"INIT_PROJECT",
+  "name":"/home/axiom/projects/versions",
+  "inode":"667855",
+  "time":"1486581151",
   "content": [
     {
-      "type": "file",
-      "name": "main.cpp",
+      "type":"file",
       "event":"IS_EQUAL",
-      "inode": "777",
-      "crc": "2a5b43cc",
-      "time":"1486469348"
+      "name":"SomeDirectory.cpp",
+      "inode":"660339",
+      "time":"1486581151",
+      "crc":"3723644585"
     },
     {
-      "type": "file",
-      "name": "Makefile",
+      "type":"file",
       "event":"IS_EQUAL",
-      "inode": "999",
-      "crc": "597b4caf",
-      "time":"1486469567"
+      "name":"result.json",
+      "inode":"667977",
+      "time":"1486581151",
+      "crc":"1504618570"
     },
     {
-      "type": "folder",
-      "name": "test",
+      "type":"file",
       "event":"IS_EQUAL",
-      "inode": "111",
-      "time":"1486469790",
-      "content": [
-        {
-          "type": "file",
-          "name": "text.txt",
+      "name":"SomeDirectory.h",
+      "inode":"660544",
+      "time":"1486581151",
+      "crc":"3479488216"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"main.cpp",
+      "inode":"668000",
+      "time":"1486581151","crc":"2801184255"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"DescriptorsList.cpp",
+      "inode":"656805",
+      "time":"1486581151",
+      "crc":"3999705655"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"DescriptorsQueue.h",
+      "inode":"660530",
+      "time":"1486581151",
+      "crc":"2958536733"
+    },
+    {
+      "type":"folder",
+      "event":"IS_EQUAL",
+      "name":"test",
+      "inode":"681739",
+      "time":"1486581151",
+      "content": []
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"RootMonitor.cpp",
+      "inode":"667971",
+      "time":"1486581151",
+      "crc":"81752006"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"request.json",
+      "inode":"660839",
+      "time":"1486581151",
+      "crc":"4237983517"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"RootMonitor.h",
+      "inode":"656944",
+      "time":"1486581151",
+      "crc":"1330277993"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"DescriptorsList.h",
+      "inode":"675413",
+      "time":"1486581151",
+      "crc":"110985996"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"JSONService.h",
+      "inode":"667986",
+      "time":"1486581151",
+      "crc":"2017745353"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"DirSnapshot.cpp",
+      "inode":"656881",
+      "time":"1486581151",
+      "crc":"2434225183"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"versions.kdev4",
+      "inode":"660546",
+      "time":"1486581151",
+      "crc":"597915263"
+    },
+    {"type":"file",
+      "event":"IS_EQUAL",
+      "name":"Makefile",
+      "inode":"656871",
+      "time":"1486581151",
+      "crc":"4180269479"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"DescriptorsQueue.cpp",
+      "inode":"669121",
+      "time":"1486581151",
+      "crc":"2688069313"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"LICENSE",
+      "inode":"660538",
+      "time":"1486581151",
+      "crc":"3964421774"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"README.md",
+      "inode":"660543",
+      "time":"1486581151",
+      "crc":"1026153555"
+    },
+    {
+      "type":"folder",
+      "event":"IS_EQUAL",
+      "name":".kdev4",
+      "inode":"681182",
+      "time":"1486581151",
+      "content":[
+	{
+	  "type":"file",
 	  "event":"IS_EQUAL",
-          "inode": "333",
-          "crc": "0fcab57d",
-	  "time":"1486469793"
-        }
+	  "name":"versions.kdev4",
+	  "inode":"681192",
+	  "time":"1486581151",
+	  "crc":"3342125516"
+	}
       ]
     },
     {
-      "type": "flie",
-      "name": "DescriptorsList.cpp",
+      "type":"file",
       "event":"IS_EQUAL",
-      "inode": "222",
-      "crc": "5fee8d0c",
-      "time":"1486469854"
+      "name":"DirSnapshot.h",
+      "inode":"656828",
+      "time":"1486581151",
+      "crc":"3873197299"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"file_status",
+      "inode":"656774",
+      "time":"1486581151",
+      "crc":"3076188994"
+    },
+    {
+      "type":"file",
+      "event":"IS_EQUAL",
+      "name":"JSONService.cpp",
+      "inode":"667869",
+      "time":"1486581151",
+      "crc":"2034952560"
     }
   ]
 }
