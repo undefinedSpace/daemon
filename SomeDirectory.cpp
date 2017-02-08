@@ -268,7 +268,7 @@ void SomeDirectory::CompareSnapshots(void)
     pdsSnapshot->GetResult(&scResult);
 
     ulSessionNumber = rmProject->GetRegularSessionNumber();
-    fprintf(stderr, "SomeDirectory::CompareSnapshots() : %ld\n", ulSessionNumber); //отладка!!!
+//     fprintf(stderr, "SomeDirectory::CompareSnapshots() : %ld\n", ulSessionNumber); //отладка!!!
     rmProject->IncRegularSessionNumber();
 
     //обрабатываем каждое отличие в отдельности
