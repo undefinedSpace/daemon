@@ -193,7 +193,7 @@ char *SomeDirectory::GetFullPath(void)
 	memset(pcBuff, 0, sPathLength + 1);
 	strncpy(pcBuff, (pDirName==NULL)?"":pDirName, sPathLength);
 
-	if(strlen(pcRetName) > 0)
+	if(strlen(pcRetName) > 0 && pDirName[stNameLen-1] != '/')
 	    strncat(pcBuff, "/", sPathLength); //чтобы на конце пути не было '/'
 
 	strncat(pcBuff, pcRetName, sPathLength);
