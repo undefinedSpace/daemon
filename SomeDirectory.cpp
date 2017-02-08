@@ -316,7 +316,7 @@ void SomeDirectory::CompareSnapshots(void)
 	    fprintf(stderr, "%s \"%s%s%s\" has been created.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
 			      (pPath==NULL)?"":pPath,
-			      (pPath==NULL)?"":"/",
+			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
 			      scResult.pfdData->pName); //отладка!!!
 	    if(pPath != NULL)
 	      delete [] pPath;
@@ -327,7 +327,10 @@ void SomeDirectory::CompareSnapshots(void)
 	    pPath = GetFullPath();
 	    fprintf(stderr, "%s \"%s%s%s\" (inode=%d) has been deleted.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
-			      (pPath==NULL)?"":pPath, (pPath==NULL)?"":"/", scResult.pfdData->pName, (int)scResult.pfdData->stData.st_ino); //отладка!!!
+			      (pPath==NULL)?"":pPath,
+			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
+			      scResult.pfdData->pName,
+			      (int)scResult.pfdData->stData.st_ino); //отладка!!!
 	    if(pPath != NULL)
 	      delete [] pPath;
 	    //добавляем запись в список событий
@@ -350,7 +353,10 @@ void SomeDirectory::CompareSnapshots(void)
 	    break;
 	  case NEW_NAME:
 	    pPath = GetFullPath();
-	    fprintf(stderr, "Some file has been renamed to \"%s%s%s\".\n", (pPath==NULL)?"":pPath, (pPath==NULL)?"":"/", scResult.pfdData->pName); //отладка!!!
+	    fprintf(stderr, "Some file has been renamed to \"%s%s%s\".\n",
+			    (pPath==NULL)?"":pPath,
+			    (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
+			    scResult.pfdData->pName); //отладка!!!
 	    if(pPath != NULL)
 	      delete [] pPath;
 	    //переимновываем файл
@@ -377,7 +383,10 @@ void SomeDirectory::CompareSnapshots(void)
 	    pPath = GetFullPath();
 	    fprintf(stderr, "%s \"%s%s%s\" (inode=%d) has been changed.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
-			      (pPath==NULL)?"":pPath, (pPath==NULL)?"":"/", scResult.pfdData->pName, (int)scResult.pfdData->stData.st_ino); //отладка!!!
+			      (pPath==NULL)?"":pPath,
+			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
+			      scResult.pfdData->pName,
+			      (int)scResult.pfdData->stData.st_ino); //отладка!!!
 
 	    //обновляем данные в базе
 	    //удаляем файл из прежнего слепка
