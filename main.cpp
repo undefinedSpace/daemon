@@ -196,9 +196,9 @@ int main(int argc, char *argv[])
     pthread_mutex_unlock(&(RootMonitor::mDescQueueMutex));
 
     //проверяем количество аргументов
-    if(argc <= 1)
+    if(argc <= 2)
     {
-	fprintf(stderr, "USAGE: file_status <directory 1> ... <directory N>\n");
+	fprintf(stderr, "USAGE: %s <path to directory 1> ... <path to directory N> <server URL>\n", argv[0]);
 	return -1;
     }
 
@@ -217,7 +217,7 @@ int main(int argc, char *argv[])
     if(sigaction(SIGUSR1, &signal_data, NULL) < 0)
 	fprintf(stderr, "sigaction(): can not activate signal\n");
 
-    for(i = 0; i < argc-1; ++i)
+    for(i = 0; i < argc-2; ++i)
     {
 	//обнуляем имя файла
 	memset(filename, 0, sizeof(filename));
@@ -227,9 +227,12 @@ int main(int argc, char *argv[])
 	//пытаемся открыть файл
 	rmProject = new RootMonitor(filename);
 	stat(filename, &st);
-	fprintf(stderr, "name: \"%s\", inode=%ld, mode=%d, DIR=%d\n", filename, st.st_ino, st.st_mode & S_IFDIR, S_IFDIR);
+	fprintf(stderr, "Project path: \"%s\", inode=%ld, mode=%d, DIR=%d\n", filename, st.st_ino, st.st_mode & S_IFDIR, S_IFDIR);
 	break;
     }
+
+    fprintf(stderr, "server URL: %s\n", argv[argc-1]);
+    rmProject->SetServerURL(argv[argc-1]);
 
     //запускаем поток обработки сигнала
     pthread_attr_init(&attr);
@@ -254,6 +257,8 @@ int main(int argc, char *argv[])
     fprintf(stderr, "%s\n", (list==NULL)?"NULL":list); //отладка!!!
     if(list != NULL) //отладка!!!
       delete [] list; //отладка!!!
+
+    rmProject->SendChangesToServer(); //отладка!!!
 
     for(;;)
     {

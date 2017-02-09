@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include<netdb.h>
 #include<fcntl.h>
 #include<stdio.h>
 #include<string.h>
@@ -12,6 +13,7 @@
 #include<pthread.h>
 #include<sys/stat.h>
 #include<sys/types.h>
+#include<sys/socket.h>
 
 #include"DescriptorsQueue.h"
 #include"DescriptorsList.h"
@@ -32,8 +34,11 @@ class RootMonitor
     unsigned long ulLastSessionNumber;
     unsigned long ulRegularSessionNumber;
 
-    char *pszServerURL; //URL адрес сервера
-    int sSocket; //сокет для отправки изменений на сервер
+    char *pszServerURL; //URL-адрес сервера
+    struct addrinfo *aiRes; //результат поиска адреса
+
+    pthread_mutex_t mSocketMutex; //блокировка сокета
+    pthread_mutex_t mEventsQueueMutex; //блокировка списка событий
 
 public:
     //список всех дескрипторов открытых директорий отслеживаемого проекта
@@ -64,6 +69,11 @@ public:
     void AddJSONService(ServiceType in_stType, unsigned long in_ulSessionNumber);
     //получить готовый запрос в формате JSON
     char * const GetJSON(unsigned long in_ulSessionNumber);
+
+    void SetServerURL(char const * const in_pszServerURL); //задать URL сервера
+    char const * const GetServerURL(void); //получить адрес сервера
+    int SendData(char * const in_pData, size_t in_stLen, bool in_fDeleteString); //отправить что-либо на сервер
+    void SendChangesToServer(void); //отправить изменения на сервер
 
     unsigned long GetLastSessionNumber(void); //получить номер последнего инициализирующего (?) списка
     unsigned long GetRegularSessionNumber(void); //получить последний номер обычной сессии

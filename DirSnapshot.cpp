@@ -486,7 +486,8 @@ void DirSnapshot::CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash)
 //инициализируем список отличий в текущем объекте слепка
 void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot * const in_pdsSet, bool in_fHash)
 {
-  FileData *pfdListSubset = NULL, *pfdListSet = NULL;
+  FileData *pfdListSubset = NULL, *pfdListSet = NULL, *pfdLastSubset = NULL;
+  bool fNotALink;
 
   //начальная проверка
   if(in_pdsSubset == NULL)
@@ -524,6 +525,8 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
   pfdListSubset = in_pdsSubset->pfdFirst->pfdNext;
   while(pfdListSubset != NULL)
   {
+    fNotALink = false;
+    pfdLastSubset = NULL;
     //перебираем все файлы второго слепка
     pfdListSet = in_pdsSet->pfdFirst->pfdNext;
     while(pfdListSet != NULL)
@@ -556,16 +559,28 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
 	    //если имена файлов не совпадают
 	    if(strcmp(pfdListSubset->pName, pfdListSet->pName) != 0)
 	    {
-	      //добавляем файл из нового слепка в список отличий
-	      in_pdsSubset->AddResult(pfdListSet, NEW_NAME);
+	      //если разные имена - возможно, файл переименован, а возможно это ссылка на него
+	      fNotALink = true;
+	      pfdLastSubset = pfdListSubset;
+	    }
+	    else
+	    {
+	      //файл найден - значит, прежде была найдена ссылка
+	      fNotALink = false;
+	      break;
 	    }
 	    //переключаем файл первого слепка на следующий
-	    break;
 	  }
 	}
       }
       pfdListSet = pfdListSet->pfdNext;
     }
+    if(fNotALink && pfdLastSubset != NULL)
+    {
+      //добавляем файл из нового слепка в список отличий
+      in_pdsSubset->AddResult(pfdLastSubset, NEW_NAME);
+    }
+
     //если достигнут конец второго слепка, и какой-то файл из первого слепка в нём не найден
     if(pfdListSet == NULL && pfdListSubset != NULL && pfdListSubset->nType != IS_NOTAFILE)
     {

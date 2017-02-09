@@ -20,7 +20,10 @@ RootMonitor::RootMonitor()
     ulLastSessionNumber = 0L;
     ulRegularSessionNumber = 4096L;
     pszServerURL = NULL;
-    sSocket = -1;
+    aiRes = NULL;
+
+    mSocketMutex = PTHREAD_MUTEX_INITIALIZER;
+    mEventsQueueMutex = PTHREAD_MUTEX_INITIALIZER;
 }
 
 RootMonitor::RootMonitor(char * const pRootPath)
@@ -29,7 +32,9 @@ RootMonitor::RootMonitor(char * const pRootPath)
     ulLastSessionNumber = 0L;
     ulRegularSessionNumber = 4096L;
     pszServerURL = NULL;
-    sSocket = -1;
+    aiRes = NULL;
+    mSocketMutex = PTHREAD_MUTEX_INITIALIZER;
+    mEventsQueueMutex = PTHREAD_MUTEX_INITIALIZER;
 
     if(pRootPath == NULL)
     {
@@ -69,7 +74,9 @@ RootMonitor::RootMonitor(FileData * const in_pfdData)
     ulLastSessionNumber = 0L;
     ulRegularSessionNumber = 4096L;
     pszServerURL = NULL;
-    sSocket = -1;
+    aiRes = NULL;
+    mSocketMutex = PTHREAD_MUTEX_INITIALIZER;
+    mEventsQueueMutex = PTHREAD_MUTEX_INITIALIZER;
 
     if(in_pfdData == NULL)
     {
@@ -108,7 +115,9 @@ RootMonitor::RootMonitor(SomeDirectory * const in_psdRootDirectory)
     ulLastSessionNumber = 0L;
     ulRegularSessionNumber = 4096L;
     pszServerURL = NULL;
-    sSocket = -1;
+    aiRes = NULL;
+    mSocketMutex = PTHREAD_MUTEX_INITIALIZER;
+    mEventsQueueMutex = PTHREAD_MUTEX_INITIALIZER;
 
     if(in_psdRootDirectory == NULL)
     {
@@ -149,15 +158,25 @@ RootMonitor::~RootMonitor()
 //    if(psdRootDirectory != NULL)
 //        delete psdRootDirectory;
     DeleteJSONServices();
+
+    pthread_mutex_lock(&mSocketMutex);
     if(pszServerURL != NULL)
       delete [] pszServerURL;
-    if(sSocket != -1)
-      close(sSocket);
+    if(aiRes != NULL)
+    {
+      freeaddrinfo(aiRes);
+      aiRes = NULL;
+    }
+    pthread_mutex_unlock(&mSocketMutex);
+    pthread_mutex_destroy(&mSocketMutex);
+    pthread_mutex_destroy(&mEventsQueueMutex);
 }
 
 void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, ResultOfCompare in_rocEvent, ino_t in_itParentInode)
 {
   JSONService *pjsList, *pjsLast, *pjsBuff;
+
+  pthread_mutex_lock(&mEventsQueueMutex);
 
   if(pjsFirst == NULL)
     pjsFirst = new JSONService(in_stType, in_ulSessionNumber);
@@ -181,6 +200,8 @@ void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNum
   }
 
   pjsList->AddChange(in_stType, in_pfdFile, in_rocEvent, in_itParentInode);
+
+  pthread_mutex_unlock(&mEventsQueueMutex);
 }
 
 //добавить в очередь инициализирующее событие для данного проекта
@@ -197,15 +218,178 @@ char * const RootMonitor::GetJSON(unsigned long in_ulSessionNumber)
   if(pjsFirst == NULL)
     return NULL;
 
+  pthread_mutex_lock(&mEventsQueueMutex);
   pjsList = pjsFirst;
   while(pjsList != NULL)
   {
     if((pjsList->GetSessionNumber()) == in_ulSessionNumber)
+    {
+      pthread_mutex_unlock(&mEventsQueueMutex);
       return (pjsList->GetJSON());
+    }
     pjsList = pjsList->GetNext();
   }
-
+  pthread_mutex_unlock(&mEventsQueueMutex);
   return NULL;
+}
+
+//инициализация адреса сервера и получение списка ip
+void RootMonitor::SetServerURL(char const * const in_pszServerURL)
+{
+  struct addrinfo aiMask;
+  struct addrinfo *aiPreRes, *aiList;
+  int sPreSocket;
+  size_t stLen;
+  int nRes;
+
+  if(in_pszServerURL == NULL)
+    return;
+
+  pthread_mutex_lock(&mSocketMutex);
+
+  memset(&aiMask, 0, sizeof(addrinfo));
+  aiMask.ai_family = AF_INET;
+  aiMask.ai_socktype = SOCK_STREAM;
+  if(getaddrinfo(in_pszServerURL, "http", &aiMask, &aiPreRes) != 0)
+  {
+    perror("RootMonitor::SetServerURL() getaddrinfo error");
+    pthread_mutex_unlock(&mSocketMutex);
+    return;
+  }
+  //проверяем работоспособность найденных адресов
+  for(aiList = aiPreRes; aiList != NULL; aiList = aiList->ai_next)
+  {
+    sPreSocket = socket(aiList->ai_family, aiList->ai_socktype, aiList->ai_protocol);
+    if(sPreSocket == -1)
+      continue;
+    if((nRes = connect(sPreSocket, aiList->ai_addr, aiList->ai_addrlen)) == 0)
+    {
+      close(sPreSocket);
+      break;
+    }
+    else
+    {
+      perror("RootMonitor::SetServerURL() connect error");
+    }
+    close(sPreSocket);
+  }
+
+  //если адреса не рабочие
+  if(aiList == NULL)
+  {
+    pthread_mutex_unlock(&mSocketMutex);
+    return;
+  }
+
+  if(aiRes != NULL)
+    freeaddrinfo(aiRes);
+
+  aiRes = aiPreRes;
+
+  if(pszServerURL != NULL)
+  {
+    delete [] pszServerURL;
+  }
+  stLen = strlen(in_pszServerURL) + 1;
+  pszServerURL = new char[stLen];
+  memset(pszServerURL, 0, stLen);
+  strncpy(pszServerURL, in_pszServerURL, stLen-1);
+
+  pthread_mutex_unlock(&mSocketMutex);
+}
+
+//получить адрес сервера
+char const * const RootMonitor::GetServerURL(void)
+{
+  return pszServerURL;
+}
+
+int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDeleteString)
+{
+  struct addrinfo *aiList;
+  int sSocket;
+
+  if(aiRes == NULL || pszServerURL == NULL || in_pData == NULL)
+    return -1;
+
+  pthread_mutex_lock(&mSocketMutex);
+  for(aiList = aiRes; aiList != NULL; aiList = aiList->ai_next)
+  {
+    sSocket = socket(aiList->ai_family, aiList->ai_socktype, aiList->ai_protocol);
+    if(sSocket == -1)
+      continue;
+    if(connect(sSocket, aiList->ai_addr, aiList->ai_addrlen) < 0)
+    {
+      close(sSocket);
+      continue;
+    }
+    if(send(sSocket, in_pData, in_stLen, 0) < 0)
+    {
+      close(sSocket);
+      continue;
+    }
+    close(sSocket);
+    break;
+  }
+
+  if(in_fDeleteString)
+    delete [] in_pData;
+
+  pthread_mutex_unlock(&mSocketMutex);
+}
+
+void RootMonitor::SendChangesToServer(void)
+{
+  size_t stLen;
+  int nTypeNumber;
+  JSONService *pjsList;
+  char *pszBuff, *pszJSON;
+  ServiceType stTypes[] = {INIT_SERVICE, CURRENT_SERVICE, NO_SERVICE};
+  char szRequest[] = "\
+POST / HTTP/1.1\r\n\
+Host: %s\r\n\
+Content-Length: %d\r\n\
+Content-Type: application/json\r\n\
+Connection: close\
+\r\n\
+\r\n\
+request='%s'";
+
+  if(pjsFirst == NULL || pszServerURL == NULL)
+    return;
+
+  pthread_mutex_lock(&mEventsQueueMutex);
+
+  nTypeNumber = 0;
+  while(stTypes[nTypeNumber] != NO_SERVICE)
+  {
+    //отправляем инициализацию
+    pjsList = pjsFirst;
+    while(pjsList != NULL)
+    {
+      if((pjsList->GetType()) == stTypes[nTypeNumber])
+      {
+	//формируем сообщение для отправки
+	pszJSON = pjsList->GetJSON();
+	if(pszJSON != NULL)
+	{
+	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 1;
+	  pszBuff = new char[stLen];
+	  memset(pszBuff, 0, stLen);
+	  snprintf(pszBuff, stLen-1, szRequest, pszServerURL, strlen(pszJSON)+10, pszJSON);
+	  fprintf(stderr, "%s\n", pszBuff);
+	  delete [] pszJSON;
+	}
+
+	//отправляем изменения (строка сама удалится после отправки)
+	SendData(pszBuff, strlen(pszBuff), true);
+      }
+      pjsList = pjsList->GetNext();
+    }
+    nTypeNumber++;
+  }
+
+  pthread_mutex_unlock(&mEventsQueueMutex);
 }
 
 unsigned long RootMonitor::GetLastSessionNumber(void)
@@ -220,7 +404,9 @@ unsigned long RootMonitor::GetRegularSessionNumber(void)
 
 void RootMonitor::IncRegularSessionNumber(void)
 {
+  pthread_mutex_lock(&mEventsQueueMutex);
   ulRegularSessionNumber++;
+  pthread_mutex_unlock(&mEventsQueueMutex);
 }
 
 //поменять/установить путь к корневой директории
@@ -277,6 +463,7 @@ void RootMonitor::DeleteJSONServices(void)
 {
     JSONService *pjsList, *pjsDel;
 
+    pthread_mutex_lock(&mEventsQueueMutex);
     pjsList = pjsDel = pjsFirst;
     while(pjsList != NULL)
     {
@@ -285,6 +472,7 @@ void RootMonitor::DeleteJSONServices(void)
 	pjsDel = pjsList;
     }
     pjsFirst = NULL;
+    pthread_mutex_unlock(&mEventsQueueMutex);
 }
 
 //вывести содержимое списка с конкретным номером сессии

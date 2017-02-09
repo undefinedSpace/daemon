@@ -11,7 +11,7 @@
 
 #include"DirSnapshot.h"
 
-enum ServiceType {NOT_READY = -1, INIT_SERVICE = 1, CURRENT_SERVICE}; //тип очереди на отправку
+enum ServiceType {NOT_READY = -1, NO_SERVICE = 0, INIT_SERVICE, CURRENT_SERVICE}; //тип очереди на отправку
 
 //запись одного изменения
 //при начальной инициализации списка файлов они вкладываются друг в друга, образуя дерево
