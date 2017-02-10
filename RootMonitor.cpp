@@ -329,12 +329,14 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
       stSent = send(sSocket, in_pData, in_stLen, 0);
       if(stSent < 0)
       {
+	usleep(100000);
 	close(sSocket);
 	continue;
       }
       stVolume = stVolume + stSent;
     }
     while(stVolume < in_stLen);
+    usleep(100000);
     close(sSocket);
     break;
   }
@@ -357,7 +359,7 @@ POST /sync HTTP/1.1\r\n\
 Host: %s\r\n\
 Content-Length: %d\r\n\
 Content-Type: application/json\r\n\
-Connection: close\
+Connection: keep-alive\
 \r\n\
 \r\n\
 %s";
