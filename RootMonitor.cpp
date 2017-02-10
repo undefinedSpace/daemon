@@ -307,6 +307,7 @@ char const * const RootMonitor::GetServerURL(void)
 int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDeleteString)
 {
   struct addrinfo *aiList;
+  size_t stSent, stVolume;
   int sSocket;
 
   if(aiRes == NULL || pszServerURL == NULL || in_pData == NULL)
@@ -323,11 +324,17 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
       close(sSocket);
       continue;
     }
-    if(send(sSocket, in_pData, in_stLen, 0) < 0)
-    {
-      close(sSocket);
-      continue;
+    stVolume = 0;
+    do {
+      stSent = send(sSocket, in_pData, in_stLen, 0);
+      if(stSent < 0)
+      {
+	close(sSocket);
+	continue;
+      }
+      stVolume = stVolume + stSent;
     }
+    while(stVolume < in_stLen);
     close(sSocket);
     break;
   }
