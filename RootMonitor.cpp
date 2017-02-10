@@ -327,9 +327,9 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
     stVolume = 0;
     do {
       stSent = send(sSocket, in_pData, in_stLen, 0);
+      usleep(100000);
       if(stSent < 0)
       {
-	usleep(100000);
 	close(sSocket);
 	continue;
       }
