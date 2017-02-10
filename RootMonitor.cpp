@@ -360,7 +360,7 @@ Content-Type: application/json\r\n\
 Connection: close\
 \r\n\
 \r\n\
-request='%s'";
+%s";
 
   if(pjsFirst == NULL || pszServerURL == NULL)
     return;
@@ -383,7 +383,7 @@ request='%s'";
 	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 1;
 	  pszBuff = new char[stLen];
 	  memset(pszBuff, 0, stLen);
-	  snprintf(pszBuff, stLen-1, szRequest, pszServerURL, strlen(pszJSON)+10, pszJSON);
+	  snprintf(pszBuff, stLen-1, szRequest, pszServerURL, strlen(pszJSON), pszJSON);
 	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
 	  delete [] pszJSON;
 
