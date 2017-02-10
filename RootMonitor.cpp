@@ -353,7 +353,7 @@ void RootMonitor::SendChangesToServer(void)
   char *pszBuff, *pszJSON;
   ServiceType stTypes[] = {INIT_SERVICE, CURRENT_SERVICE, NO_SERVICE};
   char szRequest[] = "\
-POST / HTTP/1.1\r\n\
+POST /sync HTTP/1.1\r\n\
 Host: %s\r\n\
 Content-Length: %d\r\n\
 Content-Type: application/json\r\n\

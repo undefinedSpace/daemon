@@ -426,12 +426,15 @@ void SomeDirectory::CompareSnapshots(void)
 	pdsSnapshot->GetResult(&scResult);
     }
 
-    char *list = rmProject->GetJSON(ulSessionNumber);
-    if(list != NULL)
-    {
+    //тут надо сделать отправку изменений на сервер (разблокировать поток отправки)
+    //...
+
+    char *list = rmProject->GetJSON(ulSessionNumber); //отладка!!!
+    if(list != NULL) //отладка!!!
+    { //отладка!!!
       fprintf(stderr, "%s\n", list); //отладка!!!
-      delete [] list;
-    }
+      delete [] list; //отладка!!!
+    } //отладка!!!
 
 //     rmProject->PrintServices(); //отладка!!!
 
