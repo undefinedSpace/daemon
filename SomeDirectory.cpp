@@ -429,14 +429,18 @@ void SomeDirectory::CompareSnapshots(void)
     //тут надо сделать отправку изменений на сервер (разблокировать поток отправки)
     //...
 
-//     char *list = rmProject->GetJSON(ulSessionNumber); //отладка!!!
-//     if(list != NULL) //отладка!!!
-//     { //отладка!!!
-//       fprintf(stderr, "%s\n", list); //отладка!!!
-//       delete [] list; //отладка!!!
-//     } //отладка!!!
+    char *list = rmProject->GetJSON(ulSessionNumber); //отладка!!!
+    if(list != NULL) //отладка!!!
+    { //отладка!!!
+      fprintf(stderr, "%s\n", list); //отладка!!!
+      delete [] list; //отладка!!!
+    } //отладка!!!
 
-//     rmProject->PrintServices(); //отладка!!!
+//     if(rmProject != NULL) //отладка!!!
+//       rmProject->PrintServices(); //отладка!!!
+
+    //запускаем поток отправки JSON на сервер
+   pthread_mutex_unlock(&(RootMonitor::mSendJSONThreadMutex));
 
     delete pdsRemake;
 }

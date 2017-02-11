@@ -39,7 +39,7 @@ JSONService::~JSONService()
     pfscDel = pfscList;
   }
   pthread_mutex_unlock(&mJSONServiceMutex);
-  
+
   pthread_mutex_destroy(&mJSONServiceMutex);
 }
 
@@ -91,6 +91,9 @@ char * const JSONService::GetJSON(void)
       if( pfscList->rocEvent != DIRECTORY_END &&
 	  pfscLast->nType != IS_DIRECTORY &&
 	  pfscLast->rocEvent != INIT_PROJECT &&
+	  pfscLast->rocEvent != START_FILE_LIST &&
+	  !(pfscLast->pfscNext != NULL && pfscLast->pfscNext->rocEvent == END_FILE_LIST) &&
+	  !(pfscLast->rocEvent == START_CONTENT && ((pfscLast->pfscNext != NULL)&&(pfscLast->pfscNext->rocEvent == END_CONTENT))) && //убираем содержание пустых директорий
 	  pfscList != pfscFirst )
 	strncat(pszRet, ",", stLen);
       strncat(pszRet, pfscList->pszChanges, stLen);
@@ -113,7 +116,15 @@ void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, 
   pthread_mutex_lock(&mJSONServiceMutex);
   if(pfscFirst == NULL)
   {
-    pfscFirst = new FSChange(in_stType, in_pfdFile, in_rocEvent, NULL);
+    if(in_stType == INIT_SERVICE)
+      pfscFirst = new FSChange(in_stType, in_pfdFile, in_rocEvent, NULL);
+    else
+    {
+      //подготавливаем квадратные скобки для списка файлов
+      pfscFirst = new FSChange(in_stType, NULL, START_FILE_LIST, NULL);
+      new FSChange(in_stType, NULL, END_FILE_LIST, pfscFirst);
+      new FSChange(in_stType, in_pfdFile, in_rocEvent, pfscFirst);
+    }
     pthread_mutex_unlock(&mJSONServiceMutex);
     return;
   }
@@ -127,9 +138,9 @@ void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, 
       if((pfscList->pfdFile->stData.st_ino) == in_itParentInode)
 	break;
     }
-    else
+    else if(in_stType == CURRENT_SERVICE)
     {
-      if(pfscList->pfscNext == NULL)
+      if(pfscList->pfscNext != NULL && pfscList->pfscNext->rocEvent == END_FILE_LIST)
 	break;
     }
     pfscList = pfscList->pfscNext;
@@ -208,14 +219,17 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, ResultOfC
   char szType[32], szEvent[32], szCrc[32];
   size_t stLen;
 
-  if(rocEvent == IS_DELETED)
+  if(in_rocEvent == IS_DELETED || in_rocEvent == DIRECTORY_END || in_rocEvent == START_FILE_LIST || in_rocEvent == END_FILE_LIST)
     pfdFile = NULL;
   else
     pfdFile = in_pfdFile;
 
   if(in_pfdFile == NULL || in_pfdFile->pName == NULL)
   {
-    rocEvent = IS_EMPTY;
+    if(in_rocEvent == DIRECTORY_END || in_rocEvent == START_FILE_LIST || in_rocEvent == END_FILE_LIST)
+      rocEvent = in_rocEvent;
+    else
+      rocEvent = IS_EMPTY;
     nType = IS_NOTAFILE;
     itInode = 0;
     ttTime = 0;
@@ -223,30 +237,36 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, ResultOfC
 
     pfscNext = NULL;
   }
-  rocEvent = in_rocEvent;
-  nType = in_pfdFile->nType;
-  itInode = in_pfdFile->stData.st_ino;
-  ttTime = time(NULL);
+  else
+  {
+    rocEvent = in_rocEvent;
+    nType = in_pfdFile->nType;
+    itInode = in_pfdFile->stData.st_ino;
+    ttTime = time(NULL);
+  }
 
   //непосредственно создание записи в формате JSON
   memset(szBuff, 0, sizeof(szBuff));
   memset(szType, 0, sizeof(szType));
   memset(szCrc, 0, sizeof(szCrc));
-  switch(in_pfdFile->nType)
+  if(in_pfdFile != NULL)
   {
-    case IS_FILE:
-      strncpy(szType, "file", sizeof(szType));
-      if(in_rocEvent != IS_DELETED)
-	snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
-      break;
-    case IS_DIRECTORY:
-      strncpy(szType, "folder", sizeof(szType));
-      break;
-    case IS_LINK:
-      strncpy(szType, "link", sizeof(szType));
-      if(in_rocEvent != IS_DELETED)
-	snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
-      break;
+    switch(in_pfdFile->nType)
+    {
+      case IS_FILE:
+	strncpy(szType, "file", sizeof(szType));
+	if(in_rocEvent != IS_DELETED)
+	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
+	break;
+      case IS_DIRECTORY:
+	strncpy(szType, "folder", sizeof(szType));
+	break;
+      case IS_LINK:
+	strncpy(szType, "link", sizeof(szType));
+	if(in_rocEvent != IS_DELETED)
+	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
+	break;
+    }
   }
 
   switch(in_rocEvent)
@@ -276,23 +296,33 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, ResultOfC
       strncpy(szEvent, "IS_EQUAL", sizeof(szEvent));
   }
 
-  snprintf(szBuff, sizeof(szBuff)-1, "{\"type\":\"%s\",\"event\":\"%s\",\"name\":\"%s\",\"inode\":\"%ld\",\"time\":\"%ld\"%s%s",
-				     szType,
-				     szEvent,
-				     in_pfdFile->pName,
-				     itInode,
-				     ttTime,
-				     szCrc,
-				     (in_pfdFile->nType==IS_DIRECTORY && in_stType == INIT_SERVICE)?",\"content\":[":"}");
-  
+  switch(in_rocEvent)
+  {
+    case START_FILE_LIST:
+      strncpy(szBuff, "[", sizeof(szBuff));
+      break;
+    case END_FILE_LIST:
+      strncpy(szBuff, "]", sizeof(szBuff));
+      break;
+    default:
+      snprintf(szBuff, sizeof(szBuff)-1, "{\"type\":\"%s\",\"event\":\"%s\",\"name\":\"%s\",\"inode\":\"%ld\",\"time\":\"%ld\"%s%s",
+					szType,
+					szEvent,
+					in_pfdFile->pName,
+					itInode,
+					ttTime,
+					szCrc,
+					(in_pfdFile->nType==IS_DIRECTORY && in_stType == INIT_SERVICE)?",\"content\":[":"}");
+  }
   stLen = strlen(szBuff);
   pszChanges = new char[stLen + 1];
   memset(pszChanges, 0, stLen + 1);
   //формируем начало записи
   strncpy(pszChanges, szBuff, stLen);
 
-  if(in_stType == INIT_SERVICE && in_pfdFile->nType == IS_DIRECTORY)
+  if(in_stType == INIT_SERVICE && in_pfdFile != NULL && in_pfdFile->nType == IS_DIRECTORY)
   {
+    //исключаем рекурсию
     pfscNext = new FSChange();
     if(in_pfscPrev != NULL)
     {

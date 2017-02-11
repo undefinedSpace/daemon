@@ -53,6 +53,8 @@ public:
     static pthread_mutex_t mDirThreadMutex;
     //блокировка потока обработки очереди дескрипторов
     static pthread_mutex_t mDescThreadMutex;
+    //блокировка потока отправки JSON на сервер
+    static pthread_mutex_t mSendJSONThreadMutex;
 
 public:
     RootMonitor();

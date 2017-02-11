@@ -11,6 +11,7 @@ pthread_mutex_t RootMonitor::mDescListMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t RootMonitor::mDescQueueMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t RootMonitor::mDirThreadMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t RootMonitor::mDescThreadMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t RootMonitor::mSendJSONThreadMutex = PTHREAD_MUTEX_INITIALIZER;
 
 RootMonitor::RootMonitor()
 {
@@ -353,8 +354,8 @@ void RootMonitor::SendChangesToServer(void)
 {
   size_t stLen;
   int nTypeNumber;
-  JSONService *pjsList;
   char *pszBuff, *pszJSON;
+  JSONService *pjsList, *pjsLast;
   ServiceType stTypes[] = {INIT_SERVICE, CURRENT_SERVICE, NO_SERVICE};
   char szRequest[] = "\
 POST /sync HTTP/1.1\r\n\
@@ -375,7 +376,7 @@ Connection: keep-alive\
   while(stTypes[nTypeNumber] != NO_SERVICE)
   {
     //отправляем инициализацию
-    pjsList = pjsFirst;
+    pjsList = pjsLast = pjsFirst;
     while(pjsList != NULL)
     {
       if((pjsList->GetType()) == stTypes[nTypeNumber])
@@ -393,8 +394,16 @@ Connection: keep-alive\
 
 	  //отправляем изменения (строка сама удалится после отправки)
 	  SendData(pszBuff, strlen(pszBuff), true);
+	  //удаляем отправленный сервис
+	  if(pjsList == pjsFirst)
+	    pjsFirst = pjsList->GetNext();
+	  else
+	    pjsLast->SetNext(pjsList->GetNext());
+	  delete pjsList;
+	  pjsList = pjsLast;
 	}
       }
+      pjsLast = pjsList;
       pjsList = pjsList->GetNext();
     }
     nTypeNumber++;
