@@ -327,7 +327,9 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
     stVolume = 0;
     do {
       stSent = send(sSocket, in_pData, in_stLen, 0);
-      usleep(100000);
+      //заменить паузу на блокировку дескриптора через fcntl (!)
+      //...
+      usleep(1000000);
       if(stSent < 0)
       {
 	close(sSocket);
@@ -336,7 +338,7 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
       stVolume = stVolume + stSent;
     }
     while(stVolume < in_stLen);
-    usleep(100000);
+    usleep(500000);
     close(sSocket);
     break;
   }
@@ -386,7 +388,7 @@ Connection: keep-alive\
 	  pszBuff = new char[stLen];
 	  memset(pszBuff, 0, stLen);
 	  snprintf(pszBuff, stLen-1, szRequest, pszServerURL, strlen(pszJSON), pszJSON);
-	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
+// 	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
 	  delete [] pszJSON;
 
 	  //отправляем изменения (строка сама удалится после отправки)
