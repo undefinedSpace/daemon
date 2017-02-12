@@ -2,7 +2,7 @@
 
 undefinedSpace - It's a system for changes monitoring of files on the hard drive, helpful if you do not know which file was changed a couple of days ago.
 
-undefinedSpace - complex of programs that consists of 3 main blocks: Daemon, API (PHP, JS), Web UI (soon).
+undefinedSpace - complex of programs that consists of 3 main blocks: [Daemon](https://github.com/undefinedSpace/daemon), API ([PHP](https://github.com/undefinedSpace/api-php), [JS](https://github.com/undefinedSpace/nodejs-api)), Web UI (soon).
 
 ## How to install
 
