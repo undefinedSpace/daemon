@@ -269,6 +269,8 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
 	if(in_rocEvent != IS_DELETED)
 	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
 	break;
+      default:
+	strncpy(szType, "unknown", sizeof(szType));
     }
   }
 
