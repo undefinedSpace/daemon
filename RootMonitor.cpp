@@ -251,7 +251,7 @@ void RootMonitor::SetServerURL(char const * const in_pszServerURL)
   memset(&aiMask, 0, sizeof(addrinfo));
   aiMask.ai_family = AF_INET;
   aiMask.ai_socktype = SOCK_STREAM;
-  if(getaddrinfo(in_pszServerURL, "9999", &aiMask, &aiPreRes) != 0)
+  if(getaddrinfo(in_pszServerURL, "http", &aiMask, &aiPreRes) != 0)
   {
     perror("RootMonitor::SetServerURL() getaddrinfo error");
     pthread_mutex_unlock(&mSocketMutex);
