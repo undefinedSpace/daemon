@@ -51,7 +51,7 @@ RootMonitor::RootMonitor(char * const pRootPath)
     psdRootDirectory = new SomeDirectory(pRootPath, NULL);
 
     //создаём первый список событий (инициализирующий)
-    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), NULL, INIT_PROJECT);
 
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     //этот список существует для упрощения поиска директории по её дескриптору
@@ -93,7 +93,7 @@ RootMonitor::RootMonitor(FileData * const in_pfdData)
     psdRootDirectory = new SomeDirectory(in_pfdData, NULL, true);
 
     //создаём первый список событий (инициализирующий)
-    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), NULL, INIT_PROJECT);
 
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     if(pdlList == NULL)
@@ -134,7 +134,7 @@ RootMonitor::RootMonitor(SomeDirectory * const in_psdRootDirectory)
     psdRootDirectory = in_psdRootDirectory;
 
     //создаём первый список событий (инициализирующий)
-    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), INIT_PROJECT, -1);
+    AddChange(INIT_SERVICE, ulLastSessionNumber, psdRootDirectory->GetFileData(), NULL, INIT_PROJECT);
 
     //открываем корневую директорию и добавляем полученный дескриптор в список открытых
     if(pdlList == NULL)
@@ -173,7 +173,7 @@ RootMonitor::~RootMonitor()
     pthread_mutex_destroy(&mEventsQueueMutex);
 }
 
-void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, ResultOfCompare in_rocEvent, ino_t in_itParentInode)
+void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent)
 {
   JSONService *pjsList, *pjsLast, *pjsBuff;
 
@@ -200,15 +200,15 @@ void RootMonitor::AddChange(ServiceType in_stType, unsigned long in_ulSessionNum
     pjsList->SetNext(pjsBuff);
   }
 
-  pjsList->AddChange(in_stType, in_pfdFile, in_rocEvent, in_itParentInode);
+  pjsList->AddChange(in_stType, in_pfdFile, in_pfdParent, in_rocEvent);
 
   pthread_mutex_unlock(&mEventsQueueMutex);
 }
 
 //добавить в очередь инициализирующее событие для данного проекта
-void RootMonitor::AddInitChange(FileData * const in_pfdFile, ino_t in_itParentInode)
+void RootMonitor::AddInitChange(FileData * const in_pfdFile, FileData const * const in_pfdParent)
 {
-  AddChange(INIT_SERVICE, ulLastSessionNumber, in_pfdFile, IS_EQUAL, in_itParentInode);
+  AddChange(INIT_SERVICE, ulLastSessionNumber, in_pfdFile, in_pfdParent, IS_EQUAL);
 }
 
 //получить JSON конкретной сессии

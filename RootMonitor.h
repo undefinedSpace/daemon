@@ -64,9 +64,9 @@ public:
     ~RootMonitor();
 
     //добавить изменение в список
-    void AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, ResultOfCompare in_rocEvent, ino_t in_itParentInode);
+    void AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent);
     //добавить изменение в инициализирующий список
-    void AddInitChange(FileData * const in_pfdFile, ino_t in_itParentInode);
+    void AddInitChange(FileData * const in_pfdFile, FileData const * const in_pfdParent);
     //добавить новый список изменений
     void AddJSONService(ServiceType in_stType, unsigned long in_ulSessionNumber);
     //получить готовый запрос в формате JSON
