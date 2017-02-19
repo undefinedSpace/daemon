@@ -14,13 +14,13 @@ Next we need build this program, for this from folder with source code you just 
 
     make
 
-As a result, you should see the **file_status** binary file.
+As a result, you should see the **file_status** binary file in the ./bin directory.
 
 ## How to use
 
-To use this program you need write 3 arguments:
+To use this program you need to give 2 or more arguments:
 
-    ./file_status path api-address
+    ./bin/file_status <path 1> ... [path n] <api-address>
 
-* path - absolute path on your filesystem
+* path 1, ..., path n - absolute paths in your filesystem
 * api-server - ip or dns address of your api
