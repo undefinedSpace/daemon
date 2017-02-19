@@ -191,7 +191,6 @@ int DescriptorsList::GetFd(void)
 //вывести список директорий
 void DescriptorsList::PrintList(void)
 {
-    int nDirFd;
     DirListElement *pdleList;
     FileData *pfdData;
 
@@ -209,10 +208,7 @@ void DescriptorsList::PrintList(void)
     {
 	pfdData = pdleList->psdDirectory->GetFileData();
 	if(pfdData != NULL)
-	{
-	  nDirFd = pdleList->psdDirectory->GetDirFd();
 	  fprintf(stderr, "DescriptorsList::PrintList() : DirectoryList: файл %s, fd=%d, inode=%d.\n", pdleList->psdDirectory->GetDirName(), pdleList->psdDirectory->GetDirFd(), (int)pfdData->stData.st_ino);
-	}
 	pdleList = pdleList->pdleNext;
     }
     fprintf(stderr, "DescriptorsList::PrintList() : DirectoryList: конец списка.\n\n");
@@ -222,8 +218,6 @@ void DescriptorsList::PrintList(void)
 void DescriptorsList::UpdateList(void)
 {
     DirListElement *pdleList;
-    struct sigaction signal_data;
-    sigset_t set;
     char *pPath = NULL;
     int nDirFd;
     FileData *pfdData;

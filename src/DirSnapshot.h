@@ -86,7 +86,7 @@ public:
     FileData *AddFile(char const * const in_pName, char *in_pPath, bool in_fCaclHash); //добавить файл в список
     FileData *AddFile(FileData const * const in_pName, char const * const in_pPath, bool in_fCaclHash); //добавить файл в список
     void SubFile(char const * const in_pName); //удалить файл из списка
-    void SubFile(int nInode); //удалить файл из списка по его inode
+    void SubFile(unsigned int nInode); //удалить файл из списка по его inode
     void RenameFile(FileData const * const in_pfdData); //переименовать файл
 
     void CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash);

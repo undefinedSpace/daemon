@@ -22,7 +22,6 @@ SomeDirectory::SomeDirectory()
 //объектом класса RootMonitor
 SomeDirectory::SomeDirectory(char const * const in_pName, SomeDirectory * const in_pfdParent)
 {
-    size_t stLen;
     char *pPath = NULL;
 
     pdsSnapshot = NULL;
@@ -63,7 +62,6 @@ SomeDirectory::SomeDirectory(char const * const in_pName, SomeDirectory * const 
 //слепок директории создаётся по запросу (?)
 SomeDirectory::SomeDirectory(FileData *in_pfdData, SomeDirectory * const in_pfdParent, bool in_fGetSnapshot)
 {
-    size_t stLen;
     char *pPath = NULL;
 
     pdsSnapshot = NULL;
@@ -400,6 +398,8 @@ void SomeDirectory::CompareSnapshots(void)
 	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), NEW_HASH);
 	    break;
 	  case IS_EQUAL:
+	    break;
+	  default:
 	    break;
 	}
 

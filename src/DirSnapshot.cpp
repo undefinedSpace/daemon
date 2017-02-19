@@ -24,10 +24,6 @@ DirSnapshot::DirSnapshot()
 //ненайденным директориям не задаются родительские
 DirSnapshot::DirSnapshot(char const * const in_pName)
 {
-    DIR *dFd;
-    FileData *pfdFile;
-    struct dirent *pdeData;
-
     mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
     mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
 
@@ -42,6 +38,10 @@ DirSnapshot::DirSnapshot(char const * const in_pName)
 	return;
 
 /*
+    DIR *dFd;
+    FileData *pfdFile;
+    struct dirent *pdeData;
+
     dFd = opendir(in_pName);
 
     if(dFd == NULL)
@@ -70,11 +70,6 @@ DirSnapshot::DirSnapshot(char const * const in_pName)
 
 DirSnapshot::DirSnapshot(FileData * const in_pfdParent)
 {
-    DIR *dFd;
-    char *pPath;
-    FileData *pfdFile;
-    struct dirent *pdeData;
-
     mComparisonResultList = PTHREAD_MUTEX_INITIALIZER;
     mSnapshotList = PTHREAD_MUTEX_INITIALIZER;
 
@@ -86,6 +81,11 @@ DirSnapshot::DirSnapshot(FileData * const in_pfdParent)
     //параметр in_pName - имя этой директории
 
 /*
+    DIR *dFd;
+    char *pPath;
+    FileData *pfdFile;
+    struct dirent *pdeData;
+
     //создаём список файлов (слепок)
     dFd = opendir(in_pfdParent->pName);
     if(dFd < 0)
@@ -415,7 +415,7 @@ void DirSnapshot::SubFile(char const * const in_pName)
 }
 
 //удаляем файл из слепка по его inode
-void DirSnapshot::SubFile(int in_nInode)
+void DirSnapshot::SubFile(unsigned int in_nInode)
 {
     struct FileData *pfdList;
 
@@ -849,7 +849,6 @@ void FileData::CalcHash(char const * const in_pPath)
 {
     int nFd;
     char *pcBuff;
-    ssize_t sstRead;
     char *pFullPath;
     const long BUFF_SIZE = 1048510;
     size_t stSize, stSizePath;
@@ -882,7 +881,7 @@ void FileData::CalcHash(char const * const in_pPath)
     {
       pcBuff = new char[BUFF_SIZE]; //1M
       stSize = 0;
-      while(stSize < stData.st_size)
+      while(stSize < (size_t) stData.st_size)
       {
 	memset(pcBuff, 0, BUFF_SIZE);
 	stSizePath = read(nFd, pcBuff, BUFF_SIZE);

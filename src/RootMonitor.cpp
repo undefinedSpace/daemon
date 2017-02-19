@@ -348,6 +348,8 @@ int RootMonitor::SendData(char * const in_pData, size_t in_stLen, bool in_fDelet
     delete [] in_pData;
 
   pthread_mutex_unlock(&mSocketMutex);
+
+  return stVolume;
 }
 
 void RootMonitor::SendChangesToServer(void)

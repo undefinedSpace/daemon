@@ -3,11 +3,11 @@
 #
 
 GCC=g++
-CLINK=-std=c++11 -lpthread -lz
+CLINK=-Wall -std=c++11 -lpthread -lz
 PRJNAME=file_status
 
 all:
-	$(GCC) -o ./$(PRJNAME) *.cpp $(CLINK)
+	$(GCC) -o ./bin/$(PRJNAME) ./src/*.cpp $(CLINK)
 
 clean:
-	rm -v $(PRJNAME)
+	rm -v ./bin/$(PRJNAME)
