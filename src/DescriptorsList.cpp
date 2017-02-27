@@ -130,7 +130,7 @@ void DescriptorsList::SubQueueElement(int in_nDirFd)
     while(pdleList != NULL)
     {
 	nDirFd = pdleList->psdDirectory->GetDirFd();
-// 	fprintf(stderr, "DescriptorsList::SubQueueElement() : %d, %d\n", (int)nDirFd, (int)in_nDirFd); //отладка!!!
+//	fprintf(stderr, "DescriptorsList::SubQueueElement() : %d, %d\n", (int)nDirFd, (int)in_nDirFd); //отладка!!!
 	if(nDirFd == in_nDirFd)
 	{
 	    //удаляем элемент из очереди

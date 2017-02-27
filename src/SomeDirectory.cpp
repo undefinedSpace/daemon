@@ -154,6 +154,7 @@ char *SomeDirectory::GetDirName()
 //путь к директории каждый раз получается заново
 //это сделано для упрощения переноса каталогов из одной ветки ФС в другую
 //т.к. в таком случае достаточно лишь сменить родителя переносимой папки
+//обращающаяся к этому методу функция должна самостоятельно освобождать память, выделенную под строку
 char *SomeDirectory::GetFullPath(void)
 {
     SomeDirectory *psdList;
@@ -426,9 +427,6 @@ void SomeDirectory::CompareSnapshots(void)
 	pdsSnapshot->GetResult(&scResult);
     }
 
-    //тут надо сделать отправку изменений на сервер (разблокировать поток отправки)
-    //...
-
     char *list = rmProject->GetJSON(ulSessionNumber); //отладка!!!
     if(list != NULL) //отладка!!!
     { //отладка!!!
@@ -440,7 +438,7 @@ void SomeDirectory::CompareSnapshots(void)
 //       rmProject->PrintServices(); //отладка!!!
 
     //запускаем поток отправки JSON на сервер
-   pthread_mutex_unlock(&(RootMonitor::mSendJSONThreadMutex));
+    pthread_mutex_unlock(&(RootMonitor::mSendJSONThreadMutex));
 
     delete pdsRemake;
 }

@@ -258,8 +258,6 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
 	strncpy(szType, "file", sizeof(szType));
 	if(in_rocEvent != IS_DELETED)
 	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
-	if(in_pfdParent != NULL && in_rocEvent != IS_EQUAL)
-	  snprintf(szParent, sizeof(szParent), ",\"parent\":\"%ld\"", in_pfdParent->stData.st_ino);
 	break;
       case IS_DIRECTORY:
 	strncpy(szType, "folder", sizeof(szType));
@@ -281,6 +279,8 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
       break;
     case IS_CREATED:
       strncpy(szEvent, "IS_CREATED", sizeof(szEvent));
+      if(in_pfdParent != NULL)
+        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%ld\"", in_pfdParent->stData.st_ino);
       break;
     case IS_DELETED:
       strncpy(szEvent, "IS_DELETED", sizeof(szEvent));
