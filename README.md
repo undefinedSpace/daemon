@@ -12,6 +12,7 @@ First you need the make, gcc and some other tools/libs, on Debian or Ubuntu you 
 
 Next we need build this program, for this from folder with source code you just need execute:
 
+    cmake .
     make
 
 As a result, you should see the **file_status** binary file into the ./bin directory.
@@ -20,7 +21,7 @@ As a result, you should see the **file_status** binary file into the ./bin direc
 
 To use this program you need to give 2 or more arguments:
 
-    ./bin/file_status <path 1> ... [path n] <api-address>
+    ./daemon <path 1> ... [path n] <api-address>
 
 * path 1, ..., path n - absolute paths in your filesystem
 * api-server - ip or dns address of your api
