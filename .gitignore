@@ -29,4 +29,9 @@
 *.app
 
 # Result
-file_status
+Makefile
+.idea/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+daemon
