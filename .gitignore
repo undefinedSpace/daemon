@@ -29,9 +29,10 @@
 *.app
 
 # Result
-Makefile
-.idea/
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-daemon
+/Makefile
+/.idea/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/daemon
+/CMakeLists.txt.user

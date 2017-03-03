@@ -8,7 +8,7 @@ undefinedSpace - complex of programs that consists of 3 main blocks: [Daemon](ht
 
 First you need the make, gcc and some other tools/libs, on Debian or Ubuntu you can install all what you need via APT:
 
-    apt-get install gcc make zlib1g-dev
+    apt-get install cmake gcc make zlib1g-dev
 
 Next we need build this program, for this from folder with source code you just need execute:
 
