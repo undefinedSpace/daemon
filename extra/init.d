@@ -20,7 +20,7 @@ touch $LOGFILE
 chown $RUNAS $LOGFILE
 
 start() {
-  if [ -f /var/run/$PIDNAME ] && kill -0 $(cat /var/run/$PIDNAME); then
+  if [ -f /var/run/$PIDFILE ] && kill -0 $(cat /var/run/$PIDFILE); then
     echo 'Service already running' >&2
     return 1
   fi
