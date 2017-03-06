@@ -15,7 +15,7 @@ Next we need build this program, for this from folder with source code you just 
     cmake .
     make
 
-As a result, you should see the **file_status** binary file into the ./bin directory.
+As a result, you should see the **daemon** binary file into the source directory.
 
 ## How to use
 

@@ -34,5 +34,6 @@
 /CMakeCache.txt
 /CMakeFiles/
 /cmake_install.cmake
+/usd
 /daemon
 /CMakeLists.txt.user
