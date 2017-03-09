@@ -41,6 +41,11 @@ int main(int argc, char *argv[])
   sigset_t set;
   struct sigaction signal_data;
   rlimit r;
+  JSONParser *jp = new JSONParser();
+
+//  fprintf(stderr, "DEBUG!!!\n");
+  jp->CheckRequest();
+//  return 0;
 
   //увеличиваем лимит открытых файлов для текущего процесса
   r.rlim_cur = 8192;

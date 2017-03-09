@@ -20,6 +20,7 @@
 #include"SomeDirectory.h"
 #include"DirSnapshot.h"
 #include"JSONService.h"
+#include"JSONParser.h"
 
 //все потоки обработчиков дескрипторов обращаются только к объекту этого класса (?)
 class RootMonitor
