@@ -360,7 +360,7 @@ void RootMonitor::SendChangesToServer(void)
   JSONService *pjsList, *pjsLast;
   ServiceType stTypes[] = {INIT_SERVICE, CURRENT_SERVICE, NO_SERVICE};
   char szRequest[] = "\
-%s /sync HTTP/1.1\r\n\
+%s /api/v1/sync HTTP/1.1\r\n\
 Host: %s\r\n\
 Content-Length: %d\r\n\
 Content-Type: application/json\r\n\
