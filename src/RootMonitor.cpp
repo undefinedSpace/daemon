@@ -360,7 +360,7 @@ void RootMonitor::SendChangesToServer(void)
   JSONService *pjsList, *pjsLast;
   ServiceType stTypes[] = {INIT_SERVICE, CURRENT_SERVICE, NO_SERVICE};
   char szRequest[] = "\
-POST /sync HTTP/1.1\r\n\
+%s /sync HTTP/1.1\r\n\
 Host: %s\r\n\
 Content-Length: %d\r\n\
 Content-Type: application/json\r\n\
@@ -387,10 +387,10 @@ Connection: keep-alive\
 	pszJSON = pjsList->GetJSON();
 	if(pszJSON != NULL)
 	{
-	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 1;
+	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 8;
 	  pszBuff = new char[stLen];
 	  memset(pszBuff, 0, stLen);
-	  snprintf(pszBuff, stLen-1, szRequest, pszServerURL, strlen(pszJSON), pszJSON);
+	  snprintf(pszBuff, stLen-1, szRequest, (stTypes[nTypeNumber] == INIT_SERVICE)?"POST":"PUT",pszServerURL, strlen(pszJSON), pszJSON);
 // 	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
 	  delete [] pszJSON;
 
