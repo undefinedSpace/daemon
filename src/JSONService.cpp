@@ -284,6 +284,8 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
       break;
     case IS_DELETED:
       strncpy(szEvent, "IS_DELETED", sizeof(szEvent));
+      if(in_pfdParent != NULL)
+        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%ld\"", in_pfdParent->stData.st_ino);
       break;
     case NEW_NAME:
       strncpy(szEvent, "NEW_NAME", sizeof(szEvent));
