@@ -237,21 +237,41 @@ char * const RootMonitor::GetJSON(unsigned long in_ulSessionNumber)
 //инициализация адреса сервера и получение списка ip
 void RootMonitor::SetServerURL(char const * const in_pszServerURL)
 {
-  struct addrinfo aiMask;
   struct addrinfo *aiPreRes, *aiList;
+  struct addrinfo aiMask;
+  char *pszAddr, *pPort;
+  int nRes, nIndex;
   int sPreSocket;
+  char szPort[8];
   size_t stLen;
-  int nRes;
 
   if(in_pszServerURL == NULL)
     return;
+
+  stLen = strlen(in_pszServerURL);
+  pszAddr = new char[stLen+1];
+  memset(pszAddr, 0, stLen + 1);
+  strncpy(pszAddr, in_pszServerURL, stLen);
+  nIndex = 0;
+  while(pszAddr[nIndex] != ':' && nIndex < stLen)
+  {
+    nIndex++;
+  }
+  //если порт задан
+  pPort = NULL;
+  if(nIndex < stLen)
+  {
+    pPort = pszAddr + nIndex + 1;
+    pszAddr[nIndex] = '\0';
+  }
+  snprintf(szPort, sizeof(szPort), "%s", pPort?pPort:"9999");
 
   pthread_mutex_lock(&mSocketMutex);
 
   memset(&aiMask, 0, sizeof(addrinfo));
   aiMask.ai_family = AF_INET;
   aiMask.ai_socktype = SOCK_STREAM;
-  if(getaddrinfo(in_pszServerURL, "9999", &aiMask, &aiPreRes) != 0)
+  if(getaddrinfo(pszAddr, szPort, &aiMask, &aiPreRes) != 0)
   {
     perror("RootMonitor::SetServerURL() getaddrinfo error");
     pthread_mutex_unlock(&mSocketMutex);
@@ -387,11 +407,11 @@ Connection: keep-alive\
 	pszJSON = pjsList->GetJSON();
 	if(pszJSON != NULL)
 	{
-	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 8;
+	  stLen = strlen(szRequest) + strlen(pszJSON) + strlen(pszServerURL) + 16;
 	  pszBuff = new char[stLen];
 	  memset(pszBuff, 0, stLen);
 	  snprintf(pszBuff, stLen-1, szRequest, (stTypes[nTypeNumber] == INIT_SERVICE)?"POST":"PUT",pszServerURL, strlen(pszJSON), pszJSON);
-// 	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
+//	  fprintf(stderr, "\n%s\n", pszBuff); //отладка!!!
 	  delete [] pszJSON;
 
 	  //отправляем изменения (строка сама удалится после отправки)

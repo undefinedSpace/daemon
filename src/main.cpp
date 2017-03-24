@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
   //проверяем количество аргументов
   if(argc <= 2)
   {
-    fprintf(stderr, "USAGE: %s <path to directory 1> ... <path to directory N> <server URL>\n", argv[0]);
+    fprintf(stderr, "USAGE: %s <path to directory 1> ... <path to directory N> <server URL[:Port]>\n", argv[0]);
     return -1;
   }
 
