@@ -21,7 +21,7 @@ As a result, you should see the **daemon** binary file into the source directory
 
 To use this program you need to give 2 or more arguments:
 
-    ./daemon <path 1> ... [path n] <api-address>
+    ./daemon <path 1> ... [path n] <api-address[:port]>
 
 * path 1, ..., path n - absolute paths in your filesystem
 * api-server - ip or dns address of your api
