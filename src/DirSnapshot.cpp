@@ -561,7 +561,7 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
 	    {
 	      //если разные имена - возможно, файл переименован, а возможно это ссылка на него
 	      fNotALink = true;
-	      pfdLastSubset = pfdListSubset;
+	      pfdLastSubset = pfdListSet;
 	    }
 	    else
 	    {

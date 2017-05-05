@@ -89,7 +89,7 @@ char * const JSONService::GetJSON(void)
     if(pfscList->pszChanges != NULL)
     {
       if( pfscList->rocEvent != DIRECTORY_END &&
-	  pfscLast->nType != IS_DIRECTORY &&
+	  !(pfscLast->nType == IS_DIRECTORY && ( pfscLast->rocEvent == IS_EQUAL || pfscLast->rocEvent == INIT_PROJECT )) &&
 	  pfscLast->rocEvent != INIT_PROJECT &&
 	  pfscLast->rocEvent != START_FILE_LIST &&
 	  !(pfscLast->pfscNext != NULL && pfscLast->pfscNext->rocEvent == END_FILE_LIST) &&
