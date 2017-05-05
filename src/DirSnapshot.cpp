@@ -582,7 +582,7 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
     }
 
     //если достигнут конец второго слепка, и какой-то файл из первого слепка в нём не найден
-    if(pfdListSet == NULL && pfdListSubset != NULL && pfdListSubset->nType != IS_NOTAFILE)
+    if(!fNotALink && pfdListSet == NULL && pfdListSubset != NULL && pfdListSubset->nType != IS_NOTAFILE)
     {
       //добавляем этот файл в список отличий
       in_pdsSubset->AddResult(pfdListSubset, IS_DELETED);
