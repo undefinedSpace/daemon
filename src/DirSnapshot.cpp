@@ -543,9 +543,18 @@ void DirSnapshot::IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot *
 	  {
 	    if( pfdListSubset->ulCrc != pfdListSet->ulCrc )
 	    {
-	      //хэши старого и нового слепков отличаются - файл изменён
-	      //добавляем новый файл в список отличий
-	      in_pdsSubset->AddResult(pfdListSet, NEW_HASH);
+	      if( strcmp(pfdListSubset->pName, pfdListSet->pName) == 0 )
+	      {
+		//хэши старого и нового слепков отличаются - файл изменён
+		//добавляем новый файл в список отличий
+		in_pdsSubset->AddResult(pfdListSet, NEW_HASH);
+	      }
+	      else
+	      {
+		//переходим к следующему файлу во втором слепке
+		pfdListSet = pfdListSet->pfdNext;
+		continue;
+	      }
 	    }
 	    //переходим к следующему файлу в первом слепке
 	    break;
