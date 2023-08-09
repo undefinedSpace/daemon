@@ -12,7 +12,9 @@ First you need the make, gcc and some other tools/libs, on Debian or Ubuntu you 
 
 Next we need build this program, for this from folder with source code you just need execute:
 
-    cmake .
+    mkdir build
+    cd build
+    cmake ..
     make
 
 As a result, you should see the **daemon** binary file into the source directory.
