@@ -5,8 +5,6 @@
 
 #include"JSONParser.h"
 
-using namespace undefinedspace;
-
 //************************************JSONParser*********************************************//
 JSONParser::JSONParser()
 {
@@ -62,7 +60,7 @@ bool JSONParser::CheckRequest(void)
   //    pcJSONRequest = new char[128]; //отладка!!!
   //    memset(pcJSONRequest, 0, 128); //отладка!!!
   //    strncpy(pcJSONRequest, "[{\"\"}\"]\"]", 127); //отладка!!!
-  //    std::cerr << "JSONParser::CheckRequest() : Start debug:" << std::endl << pcJSONRequest << std::endl; //отладка!!!
+  //    fprintf(stderr, "JSONParser::CheckRequest() : Start debug:\n%s\n", pcJSONRequest); //отладка!!!
   //    stStartPointer = 0; //отладка!!!
   //    stEndPointer = (long) strlen((char *)pcJSONRequest); //отладка!!!
 
@@ -109,7 +107,7 @@ bool JSONParser::CheckRequest(void)
   if(lQuotesCounter == 0 && lBraceCounter == 0 && lBracketCounter == 0)
     return true;
 
-  std::cerr << "JSONParser::CheckRequest() : Wrong JSON format!!!" << std::endl << pcJSONRequest << std::endl;
+  fprintf(stderr, "JSONParser::CheckRequest() : Wrong JSON format!!!\n%s\n", pcJSONRequest);
   return false;
 }
 
@@ -146,14 +144,14 @@ void JSONParser::ParseAllItems(void)
 
 //*************************************JSONField*********************************************//
 
-JSONField::JSONField(void)
+JSONFIELD::JSONField(void)
 {
   pcName = NULL;
   pcValue = NULL;
   pjfNext = NULL;
 }
 
-JSONField::JSONField(char * const in_pcName, char * const in_pcValue)
+JSONFIELD::JSONField(char * const in_pcName, char * const in_pcValue)
 {
   size_t stLen;
 
@@ -183,7 +181,7 @@ JSONField::JSONField(char * const in_pcName, char * const in_pcValue)
   pjfNext = NULL;
 }
 
-JSONField::~JSONField()
+JSONFIELD::~JSONField()
 {
   if(pcName != NULL)
     delete [] pcName;

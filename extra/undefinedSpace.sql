@@ -1,79 +1,81 @@
-DROP DATABASE undefinedSpace;
+-- Fresh-install schema. Only the events table is seeded.
+CREATE DATABASE IF NOT EXISTS `undefinedSpace`
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `undefinedSpace`;
 
-CREATE DATABASE undefinedSpace;
-USE undefinedSpace;
+CREATE TABLE `servers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip` text NOT NULL,
+  `hostname` text NOT NULL,
+  `token` text NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS events;
-CREATE TABLE events (
-  id          INT  NOT NULL,
-  description TEXT NOT NULL,
-  PRIMARY KEY (id)
-);
-INSERT INTO events (id, description) VALUES ('-1', 'NO_SNAPSHOT');
-INSERT INTO events (id, description) VALUES ('0', 'IS_EMPTY');
-INSERT INTO events (id, description) VALUES ('1', 'INPUT_IS_EMPTY');
-INSERT INTO events (id, description) VALUES ('2', 'OUTPUT_IS_EMPTY');
-INSERT INTO events (id, description) VALUES ('3', 'IS_CREATED');
-INSERT INTO events (id, description) VALUES ('4', 'IS_DELETED');
-INSERT INTO events (id, description) VALUES ('5', 'NEW_NAME');
-INSERT INTO events (id, description) VALUES ('6', 'NEW_TIME');
-INSERT INTO events (id, description) VALUES ('7', 'NEW_HASH');
-INSERT INTO events (id, description) VALUES ('8', 'IS_EQUAL');
-INSERT INTO events (id, description) VALUES ('9', 'DIRECTORY_END');
-INSERT INTO events (id, description) VALUES ('10', 'INIT_PROJECT');
-INSERT INTO events (id, description) VALUES ('11', 'START_CONTENT');
-INSERT INTO events (id, description) VALUES ('12', 'END_CONTENT');
-INSERT INTO events (id, description) VALUES ('13', 'START_FILE_LIST');
-INSERT INTO events (id, description) VALUES ('14', 'END_FILE_LIST');
+CREATE TABLE `events` (
+  `id` int(11) NOT NULL,
+  `description` text NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS changes;
-CREATE TABLE changes (
-  id          BIGINT    NOT NULL AUTO_INCREMENT,
-  id_item     BIGINT    NOT NULL, /* Item ID which was updated */
-  id_event    BIGINT, /* ID of event */
-  description TEXT,
-  time        TIMESTAMP NOT NULL, /* Event from server time */
-  PRIMARY KEY (id)
-);
+CREATE TABLE `items` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `id_server` int(11) NOT NULL,
+  `id_type` tinyint(4) NOT NULL,
+  `id_parent` bigint(20) DEFAULT NULL,
+  `uuid` char(36) NOT NULL,
+  `inode` bigint(20) DEFAULT NULL,
+  `name` text NOT NULL,
+  `time` timestamp NOT NULL,
+  `hash` bigint(20) DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_items_uuid` (`uuid`),
+  KEY `idx_items_inode` (`id_server`,`inode`),
+  KEY `idx_items_parent` (`id_parent`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS items;
-CREATE TABLE items (
-  id        BIGINT    NOT NULL AUTO_INCREMENT,
-  id_server INT       NOT NULL,
-  id_type   TINYINT   NOT NULL, /* 0 - folder, 1 - file */
-  id_parent BIGINT, /* ID of parent folder */
-  inode     BIGINT, /* inode should be null if item was deleted */
-  name      TEXT      NOT NULL,
-  time      TIMESTAMP NOT NULL, /* Time of last update in timestamp */
-  hash      BIGINT, /* Some hash, CRC for example */
-  deleted   BOOL      NOT NULL DEFAULT FALSE,
-  PRIMARY KEY (id)
-);
+CREATE TABLE `projects` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id_item` bigint(20) DEFAULT NULL,
+  `id_server` int(11) NOT NULL,
+  `path` text NOT NULL,
+  `time_start` timestamp NOT NULL DEFAULT current_timestamp(),
+  `time_stop` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS projects;
-CREATE TABLE projects (
-  id         INT       NOT NULL AUTO_INCREMENT,
-  id_item    INT, /* ID of current folder */
-  id_server  INT       NOT NULL,
-  path       TEXT      NOT NULL, /* Full path to project folder */
-  time_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  time_stop  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
-);
+CREATE TABLE `accords` (
+  `id_item` bigint(20) NOT NULL,
+  `id_project` int(11) NOT NULL,
+  PRIMARY KEY (`id_item`,`id_project`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS servers;
-CREATE TABLE servers (
-  id       INT  NOT NULL AUTO_INCREMENT,
-  ip       TEXT NOT NULL, /* IP address of server */
-  hostname TEXT NOT NULL,
-  token    TEXT NOT NULL, /* Token for RNCryptor */
-  PRIMARY KEY (id)
-);
-INSERT INTO servers (ip, hostname, token) VALUES ('127.0.0.1', 'localhost', 'token');
+CREATE TABLE `changes` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `id_item` bigint(20) NOT NULL,
+  `id_event` bigint(20) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `time` timestamp NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-DROP TABLE IF EXISTS accords;
-CREATE TABLE accords (
-  id_item    BIGINT NOT NULL,
-  id_project INT    NOT NULL,
-  PRIMARY KEY (id_item, id_project)
-);
+-- IDs correspond to ResultOfCompare in src/DirSnapshot.h.
+INSERT INTO `events` (`id`, `description`) VALUES
+  (-1, 'NO_SNAPSHOT'),
+  (0, 'IS_EMPTY'),
+  (1, 'INPUT_IS_EMPTY'),
+  (2, 'OUTPUT_IS_EMPTY'),
+  (3, 'IS_CREATED'),
+  (4, 'IS_DELETED'),
+  (5, 'NEW_NAME'),
+  (6, 'NEW_TIME'),
+  (7, 'NEW_HASH'),
+  (8, 'IS_EQUAL'),
+  (9, 'DIRECTORY_END'),
+  (10, 'INIT_PROJECT'),
+  (11, 'START_CONTENT'),
+  (12, 'END_CONTENT'),
+  (13, 'START_FILE_LIST'),
+  (14, 'END_FILE_LIST'),
+  (15, 'NEW_PARENT'),
+  (16, 'IS_REPLACED');

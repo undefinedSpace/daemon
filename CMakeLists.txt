@@ -1,9 +1,23 @@
-project(daemon)
-cmake_minimum_required(VERSION 2.8)
+project(undefined)
+cmake_minimum_required(VERSION 4.2)
 aux_source_directory(./src SRC_LIST)
-
-find_package (ZLIB)
+add_compile_options(-Wall)
+find_package(ZLIB)
 find_package (Threads)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
-target_link_libraries (daemon ${CMAKE_THREAD_LIBS_INIT} z)
+target_link_libraries (${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT} z mysqlclient)
+
+enable_testing()
+add_executable(file_uuid_test tests/FileUuidTest.cpp src/FileUuid.cpp)
+target_include_directories(file_uuid_test PRIVATE src)
+target_compile_options(file_uuid_test PRIVATE -UNDEBUG)
+add_test(NAME file_uuid_test COMMAND file_uuid_test)
+
+set(TEST_SOURCES ${SRC_LIST})
+list(REMOVE_ITEM TEST_SOURCES ./src/main.cpp)
+add_executable(replacement_test tests/ReplacementTest.cpp ${TEST_SOURCES})
+target_include_directories(replacement_test PRIVATE src)
+target_compile_options(replacement_test PRIVATE -UNDEBUG)
+target_link_libraries(replacement_test ${CMAKE_THREAD_LIBS_INIT} z mysqlclient)
+add_test(NAME replacement_test COMMAND replacement_test)

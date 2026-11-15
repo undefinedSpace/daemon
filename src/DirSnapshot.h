@@ -6,28 +6,26 @@
 #pragma once
 
 #include<zlib.h>
+#include<stdio.h>
 #include<errno.h>
-#include<cstring>
-#include<iostream>
+#include<string.h>
 #include<unistd.h>
 #include<dirent.h>
 #include<strings.h>
 #include<sys/stat.h>
 #include<sys/types.h>
 
-namespace undefinedspace {
+enum DaemonFileType {IS_NOTAFILE = 0, IS_DIRECTORY, IS_FILE, IS_LINK}; //виды файлов
 
-enum {IS_NOTAFILE = 0, IS_DIRECTORY, IS_FILE, IS_LINK}; //виды файлов
-
-enum class ResultOfCompare {NO_SNAPSHOT = -1, IS_EMPTY = 0, INPUT_IS_EMPTY, OUTPUT_IS_EMPTY,
-  IS_CREATED, IS_DELETED, NEW_NAME, NEW_TIME, NEW_HASH, IS_EQUAL, DIRECTORY_END,
-  INIT_PROJECT, START_CONTENT, END_CONTENT, START_FILE_LIST, END_FILE_LIST};
-
+enum ResultOfCompare {NO_SNAPSHOT = -1, IS_EMPTY = 0, INPUT_IS_EMPTY, OUTPUT_IS_EMPTY,
+      IS_CREATED, IS_DELETED, NEW_NAME, NEW_TIME, NEW_HASH, IS_EQUAL, DIRECTORY_END,
+      INIT_PROJECT, START_CONTENT, END_CONTENT, START_FILE_LIST, END_FILE_LIST, NEW_PARENT, IS_REPLACED};
 
 // "слепок" директории (двунаправленный список всех файлов данной директории)
 class DirSnapshot
 {
 public:
+
     //элемент списка файлов, находящихся в отслеживаемой директории
     //обязательно должен хранить всю структуру stat для данного файла
     //и его хэш
@@ -40,6 +38,7 @@ public:
         int nDirFd; //дескриптор (для директории)
         //char szHash[32]; //хэш (для обычного файла)
         unsigned long ulCrc;
+        char szUuid[37]; // persistent xattr user.undefinedSpace.id
 
         struct FileData *pfdNext;
         struct FileData *pfdPrev;
@@ -47,15 +46,16 @@ public:
         FileData();
         FileData(char const * const in_pName, char *in_pPath, struct FileData * const in_pfdPrev, bool in_fCalcHash);
         FileData(FileData const * const in_pfdFile, char const * const in_pPath, bool in_fCalcHash);
-	~FileData();
+        ~FileData();
 
         void CalcHash(char const * const in_pPath); //вычислить хэш файла
         void SetName(char const * const in_pName); //сменить имя файла
+        unsigned long crc32(unsigned long in_ulCrc32, const unsigned char *in_pData, size_t in_sLen);
 
     private:
-	//задать имя файла и определить его тип
+        //задать имя файла и определить его тип
         void SetFileData(char const * const in_pName, char *in_pPath, bool in_fCalcHash);
-	//получить имя файла/директории
+        //получить имя файла/директории
         char const * const GetName(void);
     };
 
@@ -63,16 +63,17 @@ public:
     {
         ResultOfCompare rocResult;
         FileData *pfdData;
+        FileData *pfdReplaced; // old object for IS_REPLACED (owned by the snapshot)
 
         struct SnapshotComparison *pscNext;
 
-        SnapshotComparison();
-        SnapshotComparison(FileData * const in_pfdFile, ResultOfCompare in_rocResult);
+	SnapshotComparison();
+        SnapshotComparison(FileData * const in_pfdFile, ResultOfCompare in_rocResult, FileData *in_pfdReplaced = NULL);
         ~SnapshotComparison();
 
-	void CopyResult(SnapshotComparison const * const in_pscSnapshotResult);
+        void CopyResult(SnapshotComparison const * const in_pscSnapshotResult);
     };
-
+    
 private:
     FileData *pfdFirst; //первый файл в списке слепка
     SnapshotComparison *pscFirst; //первый файл в списке результата сравнения двух слепков
@@ -91,14 +92,13 @@ public:
     FileData *AddFile(char const * const in_pName, char *in_pPath, bool in_fCaclHash); //добавить файл в список
     FileData *AddFile(FileData const * const in_pName, char const * const in_pPath, bool in_fCaclHash); //добавить файл в список
     void SubFile(char const * const in_pName); //удалить файл из списка
-    void SubFile(unsigned int nInode); //удалить файл из списка по его inode
     void RenameFile(FileData const * const in_pfdData); //переименовать файл
 
     void CompareSnapshots(DirSnapshot *in_pdsRemake, bool in_fHash);
     void IsDataIncluded(DirSnapshot * const in_pdsSubset, DirSnapshot * const in_pdsSet, bool in_fHash);
     void ClearResult(void); //удалить прежний результат сравнения слепков
 
-    void AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocResult); //добавить результат сравнения в список
+    void AddResult(FileData * const in_pfdFile, ResultOfCompare in_rocResult, FileData *in_pfdReplaced = NULL); //добавить результат сравнения в список
     void GetResult(SnapshotComparison * const out_pscResult); //получить следующий результат сравнения и удалить его из списка
     bool IsResultEmpty(void); //найдены отличия или нет?
 
@@ -106,4 +106,7 @@ public:
     void PrintComparison(void); //отладка!!!
 };
 
-}
+typedef DirSnapshot::FileData* PFILEDATA;
+typedef DirSnapshot::FileData const * PCFILEDATA;
+typedef DirSnapshot::FileData FILEDATA;
+typedef DirSnapshot::SnapshotComparison SNAPSHOTCOMPARISON;

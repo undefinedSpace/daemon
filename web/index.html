@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>undefinedSpace — история изменений</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Навигация по проектам">
+      <div class="brand"><span class="brand-mark">u<span>·</span></span><div><strong>undefined<span>Space</span></strong><small>ЖУРНАЛ ФАЙЛОВ</small></div></div>
+      <div class="sidebar-heading"><span>ПРОЕКТЫ</span><span id="project-count" class="pill">0</span></div>
+      <nav id="projects" class="projects" aria-label="Проекты"></nav>
+      <div class="sidebar-note"><span class="pulse"></span><span>Данные из MariaDB<br><small>Обновляются при запросе</small></span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <span class="eyebrow">ОБЗОР <span class="separator">/</span> ИСТОРИЯ ИЗМЕНЕНИЙ</span>
+        <div class="refresh-controls">
+          <label class="auto-refresh"><input id="auto-refresh" type="checkbox"> Автообновление</label>
+          <select id="refresh-period" aria-label="Период автообновления">
+            <option value="0.5">0,5 с</option>
+            <option value="1">1 с</option>
+            <option value="2" selected>2 с</option>
+            <option value="3">3 с</option>
+            <option value="5">5 с</option>
+            <option value="10">10 с</option>
+          </select>
+          <button id="refresh" class="refresh" type="button" title="Обновить данные" aria-label="Обновить данные">↻ <span>Обновить</span></button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="heading"><div class="heading-text"><div class="section-label"><span class="section-dot"></span> МОНИТОРИНГ ФАЙЛОВ</div><h1 id="title">Выберите проект</h1><p id="subtitle">История создания, изменений и перемещений файлов.</p></div><div class="heading-art" aria-hidden="true"><span class="art-line"></span><span class="art-node one"></span><span class="art-node two"></span><span class="art-node three"></span></div></div>
+
+        <div class="metrics" aria-label="Статистика проекта">
+          <div class="metric"><span class="metric-icon cyan">◇</span><span class="metric-label">ОБЪЕКТЫ</span><strong id="metric-files">—</strong><span class="metric-foot">файлы и каталоги</span></div>
+          <div class="metric"><span class="metric-icon purple">↗</span><span class="metric-label">СОБЫТИЯ</span><strong id="metric-changes">—</strong><span class="metric-foot">за всё время</span></div>
+          <div class="metric"><span class="metric-icon amber">◷</span><span class="metric-label">ПОСЛЕДНЕЕ СОБЫТИЕ</span><strong id="metric-last" class="metric-date">—</strong><span class="metric-foot">время сервера БД</span></div>
+        </div>
+
+        <section class="history" aria-labelledby="history-title">
+          <div class="history-heading"><div><div class="section-label muted">ЛЕНТА СОБЫТИЙ</div><h2 id="history-title">Что изменилось <span id="filtered-count" class="count"></span></h2></div><div class="history-hint">Путь показан в текущем состоянии</div></div>
+          <div class="toolbar"><div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Поиск по имени, UUID или событию" aria-label="Поиск по имени, UUID или событию" autocomplete="off"></div><div id="filters" class="filters" role="group" aria-label="Тип события"><button class="filter active" data-event="" type="button">Все</button><button class="filter" data-event="IS_CREATED" type="button">Созданы</button><button class="filter" data-event="NEW_HASH" type="button">Изменены</button><button class="filter" data-event="IS_REPLACED" type="button">Заменены</button><button class="filter" data-event="NEW_NAME" type="button">Переименованы</button><button class="filter" data-event="NEW_PARENT" type="button">Перемещены</button><button class="filter" data-event="IS_DELETED" type="button">Удалены</button></div></div>
+          <div id="notice" class="notice" role="status" hidden></div>
+          <div id="timeline" class="timeline" aria-live="polite"></div>
+          <div class="pagination"><button id="prev" type="button" disabled>← Назад</button><span id="page-info">—</span><button id="next" type="button" disabled>Далее →</button></div>
+        </section>
+        <footer>undefinedSpace <span>·</span> UUID определяет файл, а не путь к нему</footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

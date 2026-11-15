@@ -6,8 +6,8 @@
 #pragma once
 
 #include<fcntl.h>
-#include<cstring>
-#include<iostream>
+#include<stdio.h>
+#include<string.h>
 #include<unistd.h>
 #include<pthread.h>
 #include<sys/stat.h>
@@ -15,11 +15,9 @@
 
 #include"DirSnapshot.h"
 
-namespace undefinedspace {
-
 class SomeDirectory
 {
-    DirSnapshot::FileData *pfdData; //ссылка на полное описание файла
+    PFILEDATA pfdData; //ссылка на полное описание файла
     SomeDirectory *psdParent; //ссылка на директорию-владелец (для поиска полного пути)
     DirSnapshot *pdsSnapshot; //слепок текущей директории
 
@@ -28,23 +26,21 @@ public:
     //этот конструктор используется только классом RootMonitor,
     //поскольку он будет хранить ссылку на созданный объект
     SomeDirectory(char const * const in_pName, SomeDirectory * const in_pfdParent);
-    SomeDirectory(DirSnapshot::FileData *in_pfdData, SomeDirectory * const in_pfdParent, bool in_fGetSnapshot);
+    SomeDirectory(PFILEDATA in_pfdData, SomeDirectory * const in_pfdParent, bool in_fGetSnapshot);
     ~SomeDirectory();
 
     int GetDirFd(void); //получить дескриптор директории
     char *GetDirName(void); //получить имя директории
-    char *GetFullPath(void); //получить путь к директории (требует освобождения памяти, выделенной под результат)
+    char *GetFullPath(void); //получить путь к директории (требует освобождения памяти, выделенной под результата)
 
-    SomeDirectory * const GetParent(void); //получить ссылку на описание родительского каталога
-    DirSnapshot::FileData *GetFileData(void); //получить полное описание файла
+    SomeDirectory * const GetParent(void); //получить ссылку на описание родилельского каталога
+    PFILEDATA GetFileData(void); //получить полное описание файла
 
-    void MakeSnapshot(bool in_fStartDirThread); //сделать слепок
-    void CompareSnapshots(void); //сравнить старый слепок с новым и обработать результат
+    void MakeSnapshot(void); //сделать слепок
+    void CompareSnapshots(const char * const in_pszToken); //сравнить старый слепок с новым и обработать результат
     bool IsSnapshotNeeded(void); //существует уже слепок или ещё нет?
 
     int SetDirName(char const * const in_pNewDirName); //сменить путь к директории
 
     void PrintSnapshot(void); //отладка!!!
 };
-
-}
