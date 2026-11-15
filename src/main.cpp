@@ -17,11 +17,11 @@
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include<sys/select.h>
-#include<sys/resource.h>
 
 #include"RootMonitor.h"
 #include"SimpleSemantic.h"
 #include"FileUuid.h"
+#include"FileLimit.h"
 
 #define PORT_NUMBER 44553
 #define SOCKET_READ_SIZE 102400
@@ -41,8 +41,10 @@ int main(int argc, char *argv[])
   char filename[256];
   char rootUuid[37];
   struct stat st;
-  rlimit r;
   JSONParser *jp;
+
+  if(!ConfigureOpenFileLimit())
+    return 1;
 
   //запускаем сервер
   StartSomeThread(1024000L, server_thread, NULL);
@@ -52,14 +54,6 @@ int main(int argc, char *argv[])
 //  fprintf(stderr, "DEBUG!!!\n");
   jp->CheckRequest();
 //  return 0;
-
-  //увеличиваем лимит открытых файлов для текущего процесса
-  r.rlim_cur = 8192;
-  r.rlim_max = 8192;
-  if(setrlimit(RLIMIT_NOFILE, &r) < 0)
-    perror("main(), setrlimit error:");
-  getrlimit(RLIMIT_NOFILE, &r);
-  fprintf(stderr, "main() : nofile limits: rlim_cur=%ld, rlim_max=%ld\n", r.rlim_cur, r.rlim_max);
 
   pthread_mutex_lock(&(RootMonitor::mSendJSONThreadMutex));
 

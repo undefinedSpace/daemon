@@ -41,6 +41,7 @@ int main()
   const std::string copy = root + "/copy";
   const std::string link = root + "/link";
   const std::string renamed = root + "/renamed";
+  const std::string symlink = root + "/symlink";
 
   std::ofstream(original).put('x');
   const std::string sourceUuid = Uuid(original);
@@ -59,6 +60,27 @@ int main()
   assert(rename(original.c_str(), renamed.c_str()) == 0);
   assert(Uuid(renamed) == sourceUuid);
 
+  assert(symlinkat(renamed.c_str(), AT_FDCWD, symlink.c_str()) == 0);
+  FILE *diagnostics = tmpfile();
+  assert(diagnostics != NULL);
+  const int originalStderr = dup(STDERR_FILENO);
+  assert(originalStderr >= 0);
+  fflush(stderr);
+  assert(dup2(fileno(diagnostics), STDERR_FILENO) >= 0);
+  char ignored[37];
+  const bool marked = EnsureFileUuid(symlink.c_str(), ignored);
+  fflush(stderr);
+  assert(dup2(originalStderr, STDERR_FILENO) >= 0);
+  close(originalStderr);
+  assert(!marked);
+  rewind(diagnostics);
+  char message[1024] = {};
+  assert(fgets(message, sizeof(message), diagnostics) != NULL);
+  assert(std::string(message).find(symlink) != std::string::npos);
+  assert(std::string(message).find("failed") != std::string::npos);
+  fclose(diagnostics);
+
+  assert(unlink(symlink.c_str()) == 0);
   assert(unlink(link.c_str()) == 0);
   assert(unlink(renamed.c_str()) == 0);
   assert(unlink(copy.c_str()) == 0);

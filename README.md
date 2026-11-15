@@ -31,6 +31,10 @@ It needs a kernel and filesystem that support this mode and privileges to create
 the fanotify group (normally `CAP_SYS_ADMIN`). If a directory cannot be marked,
 the daemon prints an error; changes in that directory may then be missed.
 On fanotify queue overflow it rescans the monitored directories.
+At startup it raises its soft open-file limit to the process's hard limit
+(capped by `/proc/sys/fs/nr_open` if unlimited), before opening monitored
+directories. Raising a hard limit imposed by the launching service or shell
+requires additional privileges; configure that limit in the service if needed.
 
 File identity is a UUID stored in the `user.undefinedSpace.id` extended attribute;
 the inode is kept only as a search hint. The companion xattr

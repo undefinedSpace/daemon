@@ -211,11 +211,17 @@ DirSnapshot::DirSnapshot(void * const in_psdParent, bool in_fMakeHash, bool in_f
 	    //в обычный список будут добавляться файлы непосредственно из обработчика отличий
 	    if(in_fUpdateDirList)
 	    {
-	      if(pfdFile != NULL && pfdFile->nType != IS_NOTAFILE &&
-	         rmProject != NULL && psdParent->GetFileData() != NULL)
-		rmProject->AddInitChange(pfdFile, psdParent->GetFileData());
-	      else
-		fprintf(stderr, "DirSnapshot::DirSnapshot() : error! rmProject=%ld\n", (unsigned long)rmProject);
+	      // AddFile reports the reason when an entry cannot be read. Do not
+	      // replace that diagnostic with an unrelated pointer value.
+	      if(pfdFile != NULL && pfdFile->nType != IS_NOTAFILE)
+	      {
+	        if(rmProject != NULL && psdParent->GetFileData() != NULL)
+	          rmProject->AddInitChange(pfdFile, psdParent->GetFileData());
+	        else
+	          fprintf(stderr, "Cannot initialize \"%s/%s\": %s\n",
+	                  pPath ? pPath : "", pdeData->d_name,
+	                  rmProject == NULL ? "project monitor is unavailable" : "parent directory data is unavailable");
+	      }
 	    }
 
 //  	    if(in_fUpdateDirList)
@@ -343,7 +349,8 @@ PFILEDATA DirSnapshot::AddFile(char const * const in_pName, char *in_pPath, bool
     }
     else
     {
-//       fprintf(stderr, "DirSnapshot::AddFile() : \"%s\"\n", pFullPath); //отладка!!!
+      const int error = errno;
+      fprintf(stderr, "Cannot scan \"%s\": lstat failed: %s\n", pFullPath, strerror(error));
       delete [] pFullPath;
       pthread_mutex_unlock(&mSnapshotList);
       return NULL;
@@ -953,8 +960,9 @@ void DirSnapshot::FileData::SetFileData(char const * const in_pName, char *in_pP
     {
 	//осторожно, может сильно вырасти список пустышек (!)
 	//возможно, стоит вызывать stat до создания объекта класса FileData
-	perror("error in stat, FileData::SetFileData()");
- 	fprintf(stderr, "Can not get stat FileData::SetFileData() : \"%s\" !\n", in_pName); //отладка!!!
+	fprintf(stderr, "Cannot scan \"%s\": lstat failed: %s\n",
+	        pPath ? pPath : (in_pName ? in_pName : "(unknown)"),
+	        in_pName && *in_pName ? strerror(errno) : "missing file name");
 	pName = new char[1];
 	memset(pName, 0, sizeof(char));
 	pSafeName = NULL;
@@ -998,6 +1006,10 @@ void DirSnapshot::FileData::SetFileData(char const * const in_pName, char *in_pP
 	    nType = IS_LINK;
     else
         nType = IS_NOTAFILE;
+
+    if(nType == IS_NOTAFILE)
+      fprintf(stderr, "Cannot scan \"%s\": unsupported file type (mode 0%o)\n",
+              pPath, (unsigned int)st.st_mode);
 
     if(nType != IS_NOTAFILE && !EnsureFileUuid(pPath, szUuid))
       nType = IS_NOTAFILE;

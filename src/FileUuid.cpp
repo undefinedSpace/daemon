@@ -14,6 +14,12 @@ namespace {
 const char uuidAttribute[] = "user.undefinedSpace.id";
 const char identityAttribute[] = "user.undefinedSpace.identity";
 
+void ReportError(const char *operation, const char *path)
+{
+  const int error = errno;
+  fprintf(stderr, "%s for \"%s\": %s\n", operation, path, strerror(error));
+}
+
 // The filesystem ID and birth time distinguish copies, including ones made
 // with cp -a. Unlike st_dev, statfs.f_fsid is stable across remounts on ext4.
 struct Identity {
@@ -29,9 +35,14 @@ bool CurrentIdentity(const char *path, Identity &identity)
 {
   struct stat file;
   struct statfs fs;
-  if(lstat(path, &file) < 0 || statfs(path, &fs) < 0)
+  if(lstat(path, &file) < 0)
   {
-    perror("file identity stat");
+    ReportError("lstat file identity failed", path);
+    return false;
+  }
+  if(statfs(path, &fs) < 0)
+  {
+    ReportError("statfs file identity failed", path);
     return false;
   }
   static_assert(sizeof(fs.f_fsid) == sizeof(identity.fsid), "unexpected filesystem ID size");
@@ -65,12 +76,17 @@ bool Valid(const char *value)
   return value[36] == '\0';
 }
 
-bool NewUuid(char value[37])
+bool NewUuid(char value[37], const char *path)
 {
   unsigned char bytes[16];
-  if(getrandom(bytes, sizeof(bytes), 0) != sizeof(bytes))
+  const ssize_t size = getrandom(bytes, sizeof(bytes), 0);
+  if(size != sizeof(bytes))
   {
-    perror("getrandom UUID");
+    if(size < 0)
+      ReportError("getrandom UUID failed", path);
+    else
+      fprintf(stderr, "getrandom UUID for \"%s\": received only %zd of %zu bytes\n",
+              path, size, sizeof(bytes));
     return false;
   }
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -100,9 +116,14 @@ bool EnsureFileUuid(const char *path, char out[37])
       return false;
     }
   }
-  else if(size >= 0 || errno != ENODATA)
+  else if(size >= 0)
   {
-    perror("read UUID xattr");
+    fprintf(stderr, "Invalid UUID xattr for \"%s\": expected 36 bytes, got %zd\n", path, size);
+    return false;
+  }
+  else if(errno != ENODATA)
+  {
+    ReportError("read UUID xattr failed", path);
     return false;
   }
 
@@ -116,7 +137,7 @@ bool EnsureFileUuid(const char *path, char out[37])
   }
   if(identitySize < 0 && errno != ENODATA)
   {
-    perror("read identity xattr");
+    ReportError("read identity xattr failed", path);
     return false;
   }
   if(hadUuid && hadIdentity && memcmp(&stored, &current, sizeof(stored)) == 0)
@@ -130,12 +151,12 @@ bool EnsureFileUuid(const char *path, char out[37])
   // marker, however, proves this is a distinct object and needs a new UUID.
   if(!hadUuid || hadIdentity)
   {
-    if(!NewUuid(value)) return false;
+    if(!NewUuid(value, path)) return false;
     if(lsetxattr(path, uuidAttribute, value, 36,
                  hadUuid ? XATTR_REPLACE : XATTR_CREATE) < 0)
     {
       if(errno == EEXIST) return EnsureFileUuid(path, out);
-      perror("write UUID xattr");
+      ReportError("write UUID xattr failed", path);
       return false;
     }
   }
@@ -144,7 +165,7 @@ bool EnsureFileUuid(const char *path, char out[37])
                hadIdentity ? XATTR_REPLACE : XATTR_CREATE) < 0)
   {
     if(errno == EEXIST) return EnsureFileUuid(path, out);
-    perror("write identity xattr");
+    ReportError("write identity xattr failed", path);
     return false;
   }
   memcpy(out, value, sizeof(value));

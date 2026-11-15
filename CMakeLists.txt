@@ -14,6 +14,11 @@ target_include_directories(file_uuid_test PRIVATE src)
 target_compile_options(file_uuid_test PRIVATE -UNDEBUG)
 add_test(NAME file_uuid_test COMMAND file_uuid_test)
 
+add_executable(file_limit_test tests/FileLimitTest.cpp src/FileLimit.cpp)
+target_include_directories(file_limit_test PRIVATE src)
+target_compile_options(file_limit_test PRIVATE -UNDEBUG)
+add_test(NAME file_limit_test COMMAND file_limit_test)
+
 set(TEST_SOURCES ${SRC_LIST})
 list(REMOVE_ITEM TEST_SOURCES ./src/main.cpp)
 add_executable(replacement_test tests/ReplacementTest.cpp ${TEST_SOURCES})
