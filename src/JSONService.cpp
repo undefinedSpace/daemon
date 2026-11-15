@@ -89,14 +89,20 @@ char * const JSONService::GetJSON(void)
     if(pfscList->pszChanges != NULL)
     {
       if( pfscList->rocEvent != DIRECTORY_END &&
-	  !(pfscLast->nType == IS_DIRECTORY && ( pfscLast->rocEvent == IS_EQUAL || pfscLast->rocEvent == INIT_PROJECT )) &&
-	  pfscLast->rocEvent != INIT_PROJECT &&
-	  pfscLast->rocEvent != START_FILE_LIST &&
+          !(pfscLast->nType == IS_DIRECTORY && (pfscLast->rocEvent == IS_EQUAL || pfscLast->rocEvent == INIT_PROJECT)) &&
+          pfscLast->rocEvent != INIT_PROJECT &&
+          pfscLast->rocEvent != START_FILE_LIST &&
+          pfscList->rocEvent != START_FILE_LIST &&
 	  !(pfscLast->pfscNext != NULL && pfscLast->pfscNext->rocEvent == END_FILE_LIST) &&
 	  !(pfscLast->rocEvent == START_CONTENT && ((pfscLast->pfscNext != NULL)&&(pfscLast->pfscNext->rocEvent == END_CONTENT))) && //убираем содержание пустых директорий
 	  pfscList != pfscFirst )
+      {
 	strncat(pszRet, ",", stLen);
+//	fprintf(stderr, ",\n"); //отладка!!!
+      }
+
       strncat(pszRet, pfscList->pszChanges, stLen);
+//      fprintf(stderr, "%s\n",pfscList->pszChanges); //отладка!!!
     }
     pfscLast = pfscList;
     pfscList = pfscList->pfscNext;
@@ -106,7 +112,7 @@ char * const JSONService::GetJSON(void)
 }
 
 //добавить в список запись об изменении файла
-void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent)
+void JSONService::AddChange(ServiceType in_stType, PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent, ResultOfCompare in_rocEvent, const char * const in_pszToken)
 {
   FSChange *pfscList;
 
@@ -117,13 +123,15 @@ void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, 
   if(pfscFirst == NULL)
   {
     if(in_stType == INIT_SERVICE)
-      pfscFirst = new FSChange(in_stType, in_pfdFile, NULL, in_rocEvent, NULL);
+    {
+      pfscFirst = new FSChange(in_stType, in_pfdFile, NULL, in_rocEvent, NULL, in_pszToken);
+    }
     else
     {
       //подготавливаем квадратные скобки для списка файлов
-      pfscFirst = new FSChange(in_stType, NULL, NULL, START_FILE_LIST, NULL);
-      new FSChange(in_stType, NULL, NULL, END_FILE_LIST, pfscFirst);
-      new FSChange(in_stType, in_pfdFile, in_pfdParent, in_rocEvent, pfscFirst);
+      pfscFirst = new FSChange(in_stType, NULL, NULL, START_FILE_LIST, NULL, in_pszToken);
+      new FSChange(in_stType, NULL, NULL, END_FILE_LIST, pfscFirst, in_pszToken);
+      new FSChange(in_stType, in_pfdFile, in_pfdParent, in_rocEvent, pfscFirst, in_pszToken);
     }
     pthread_mutex_unlock(&mJSONServiceMutex);
     return;
@@ -135,7 +143,7 @@ void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, 
   {
     if(in_stType == INIT_SERVICE && pfscList->pfdFile != NULL && in_pfdParent != NULL)
     {
-      if((pfscList->pfdFile->stData.st_ino) == (in_pfdParent->stData.st_ino))
+      if(strcmp(pfscList->pfdFile->szUuid, in_pfdParent->szUuid) == 0)
 	break;
     }
     else if(in_stType == CURRENT_SERVICE)
@@ -153,7 +161,7 @@ void JSONService::AddChange(ServiceType in_stType, FileData * const in_pfdFile, 
   }
 
   //добавляем событие в список
-  new FSChange(in_stType, in_pfdFile, in_pfdParent, in_rocEvent, pfscList);
+  new FSChange(in_stType, in_pfdFile, in_pfdParent, in_rocEvent, pfscList, in_pszToken);
   pthread_mutex_unlock(&mJSONServiceMutex);
 }
 
@@ -213,10 +221,10 @@ FSChange::FSChange()
 }
 
 //перед добавлением записи необходимо найти место, куда её вставить
-FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent, FSChange * const in_pfscPrev)
+FSChange::FSChange(ServiceType in_stType, PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent, ResultOfCompare in_rocEvent, FSChange * const in_pfscPrev, const char * const in_pszToken)
 {
   char szBuff[2048]; //буфер под запись
-  char szType[32], szEvent[32], szCrc[32], szParent[32];
+  char szType[32], szEvent[32], szCrc[32], szParent[64], szToken[64];
   size_t stLen;
 
   if(in_rocEvent == IS_DELETED || in_rocEvent == DIRECTORY_END || in_rocEvent == START_FILE_LIST || in_rocEvent == END_FILE_LIST)
@@ -250,25 +258,26 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
   memset(szType, 0, sizeof(szType));
   memset(szCrc, 0, sizeof(szCrc));
   memset(szParent, 0, sizeof(szParent));
+  memset(szToken, 0, sizeof(szToken));
   if(in_pfdFile != NULL)
   {
     switch(in_pfdFile->nType)
     {
       case IS_FILE:
-	strncpy(szType, "file", sizeof(szType));
-	if(in_rocEvent != IS_DELETED)
-	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
-	break;
+        strncpy(szType, "file", sizeof(szType));
+        if(in_rocEvent != IS_DELETED)
+          snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
+        break;
       case IS_DIRECTORY:
-	strncpy(szType, "folder", sizeof(szType));
-	break;
+        strncpy(szType, "folder", sizeof(szType));
+        break;
       case IS_LINK:
-	strncpy(szType, "link", sizeof(szType));
-	if(in_rocEvent != IS_DELETED)
-	  snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
-	break;
+        strncpy(szType, "link", sizeof(szType));
+        if(in_rocEvent != IS_DELETED)
+          snprintf(szCrc, sizeof(szCrc), ",\"crc\":\"%ld\"", in_pfdFile->ulCrc);
+        break;
       default:
-	strncpy(szType, "unknown", sizeof(szType));
+        strncpy(szType, "unknown", sizeof(szType));
     }
   }
 
@@ -280,12 +289,21 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
     case IS_CREATED:
       strncpy(szEvent, "IS_CREATED", sizeof(szEvent));
       if(in_pfdParent != NULL)
-        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%ld\"", in_pfdParent->stData.st_ino);
+        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%s\"", in_pfdParent->szUuid);
+      if(in_pszToken != NULL)
+        snprintf(szToken, sizeof(szToken), ",\"token\":\"%s\"",in_pszToken);
       break;
     case IS_DELETED:
       strncpy(szEvent, "IS_DELETED", sizeof(szEvent));
       if(in_pfdParent != NULL)
-        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%ld\"", in_pfdParent->stData.st_ino);
+        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%s\"", in_pfdParent->szUuid);
+      break;
+    case IS_REPLACED:
+      strncpy(szEvent, "IS_REPLACED", sizeof(szEvent));
+      if(in_pfdParent != NULL)
+        snprintf(szParent, sizeof(szParent), ",\"parent\":\"%s\"", in_pfdParent->szUuid);
+      if(in_pszToken != NULL)
+        snprintf(szToken, sizeof(szToken), ",\"old_uuid\":\"%s\"", in_pszToken);
       break;
     case NEW_NAME:
       strncpy(szEvent, "NEW_NAME", sizeof(szEvent));
@@ -298,6 +316,7 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
       break;
     case INIT_PROJECT:
       strncpy(szEvent, "INIT_PROJECT", sizeof(szEvent));
+      snprintf(szToken, sizeof(szToken), ",\"token\":\"%s\"",in_pszToken);
       break;
     default:
       strncpy(szEvent, "IS_EQUAL", sizeof(szEvent));
@@ -312,15 +331,17 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
       strncpy(szBuff, "]", sizeof(szBuff));
       break;
     default:
-      snprintf(szBuff, sizeof(szBuff)-1, "{\"type\":\"%s\",\"event\":\"%s\",\"name\":\"%s\",\"inode\":\"%ld\",\"time\":\"%ld\"%s%s%s",
+      snprintf(szBuff, sizeof(szBuff)-1, "{\"type\":\"%s\",\"event\":\"%s\",\"name\":\"%s\",\"uuid\":\"%s\",\"inode\":\"%ld\",\"time\":\"%ld\"%s%s%s%s",
 					szType,
 					szEvent,
 					in_pfdFile->pName,
+                    in_pfdFile->szUuid,
 					itInode,
 					ttTime,
 					szCrc,
 					szParent,
-					(in_pfdFile->nType==IS_DIRECTORY && in_stType == INIT_SERVICE)?",\"content\":[":"}");
+                			szToken,
+                    (in_pfdFile->nType==IS_DIRECTORY && in_stType == INIT_SERVICE)?",\"content\":[":"}");
   }
   stLen = strlen(szBuff);
   pszChanges = new char[stLen + 1];
@@ -355,7 +376,7 @@ FSChange::FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData 
     else
       pfscNext = NULL;
   }
-//   fprintf(stderr, "FSChange::FSChange() : %s\n", pszChanges); //отладка!!!
+  //fprintf(stderr, "FSChange::FSChange() : %s\n", pszChanges); //отладка!!!
 }
 
 FSChange::~FSChange()

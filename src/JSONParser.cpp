@@ -144,14 +144,14 @@ void JSONParser::ParseAllItems(void)
 
 //*************************************JSONField*********************************************//
 
-JSONField::JSONField(void)
+JSONFIELD::JSONField(void)
 {
   pcName = NULL;
   pcValue = NULL;
   pjfNext = NULL;
 }
 
-JSONField::JSONField(char * const in_pcName, char * const in_pcValue)
+JSONFIELD::JSONField(char * const in_pcName, char * const in_pcValue)
 {
   size_t stLen;
 
@@ -181,7 +181,7 @@ JSONField::JSONField(char * const in_pcName, char * const in_pcValue)
   pjfNext = NULL;
 }
 
-JSONField::~JSONField()
+JSONFIELD::~JSONField()
 {
   if(pcName != NULL)
     delete [] pcName;

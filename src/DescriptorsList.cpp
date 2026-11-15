@@ -4,8 +4,10 @@
 //Класс DescriptorsList содержит список всех открытых дескрипторов
 
 #include"DescriptorsList.h"
+#include"RootMonitor.h"
+#include <vector>
 
-/*********************************DescriptorQueue*********************************/
+/*********************************DescriptorsList*********************************/
 
 DescriptorsList::DescriptorsList()
 {
@@ -28,7 +30,7 @@ DescriptorsList::DescriptorsList(SomeDirectory *in_psdRootDirectory)
     pthread_mutex_unlock(&mListMutex);
 }
 
-DescriptorsList::DescriptorsList(FileData *in_pfdData)
+DescriptorsList::DescriptorsList(PFILEDATA in_pfdData)
 {
     //инициализация блокировки списка директорий
     mListMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -49,9 +51,9 @@ DescriptorsList::~DescriptorsList()
     pdleList = pdleFirst->pdleNext;
     while(pdleList != NULL)
     {
-	pdleDel = pdleList;
-	pdleList = pdleList->pdleNext;
-	delete pdleDel;
+        pdleDel = pdleList;
+        pdleList = pdleList->pdleNext;
+        delete pdleDel;
     }
     delete pdleFirst;
     pdleFirst = NULL;
@@ -70,11 +72,11 @@ void DescriptorsList::AddQueueElement(SomeDirectory * const in_psdPtr)
     //добавляем элемент списка
     if(pdleFirst == NULL)
     {
-	pthread_mutex_lock(&mListMutex);
-	//если список пуст - назначаем первый элемент
-	pdleFirst = new DirListElement(in_psdPtr, NULL);
-	pthread_mutex_unlock(&mListMutex);
-	return;
+        pthread_mutex_lock(&mListMutex);
+        //если список пуст - назначаем первый элемент
+        pdleFirst = new DirListElement(in_psdPtr, NULL);
+        pthread_mutex_unlock(&mListMutex);
+        return;
     }
 
     pthread_mutex_lock(&mListMutex);
@@ -82,7 +84,7 @@ void DescriptorsList::AddQueueElement(SomeDirectory * const in_psdPtr)
     pdleList = pdleFirst;
     while(pdleList->pdleNext != NULL)
     {
-	pdleList = pdleList->pdleNext;
+        pdleList = pdleList->pdleNext;
     }
 
     //добавляем директорию в конец списка
@@ -103,15 +105,15 @@ void DescriptorsList::SubQueueElement(SomeDirectory const * const in_psdPtr)
     pdleList = pdleFirst;
     while(pdleList != NULL)
     {
-	if(pdleList->psdDirectory == in_psdPtr)
-	{
-	    //удаляем найденный элемент из списка
-	    if(pdleFirst == pdleList)
-	      pdleFirst = pdleList->pdleNext;
-	    delete pdleList;
-	    pthread_mutex_unlock(&mListMutex);
-	    return;
-	}
+        if(pdleList->psdDirectory == in_psdPtr)
+        {
+            //удаляем найденный элемент из списка
+            if(pdleFirst == pdleList)
+              pdleFirst = pdleList->pdleNext;
+            delete pdleList;
+            pthread_mutex_unlock(&mListMutex);
+            return;
+        }
     }
     pthread_mutex_unlock(&mListMutex);
 }
@@ -129,24 +131,26 @@ void DescriptorsList::SubQueueElement(int in_nDirFd)
     pdleList = pdleFirst;
     while(pdleList != NULL)
     {
-	nDirFd = pdleList->psdDirectory->GetDirFd();
-//	fprintf(stderr, "DescriptorsList::SubQueueElement() : %d, %d\n", (int)nDirFd, (int)in_nDirFd); //отладка!!!
-	if(nDirFd == in_nDirFd)
-	{
-	    //удаляем элемент из очереди
-	    if(pdleFirst == pdleList)
-	      pdleFirst = pdleList->pdleNext;
-	    delete pdleList;
-	    pthread_mutex_unlock(&mListMutex);
-	    return;
-	}
-	pdleList = pdleList->pdleNext;
+        nDirFd = pdleList->psdDirectory->GetDirFd();
+//    	fprintf(stderr, "DescriptorsList::SubQueueElement() : %d, %d\n", (int)nDirFd, (int)in_nDirFd); //отладка!!!
+        if(nDirFd == in_nDirFd)
+        {
+            if(RootMonitor::watcher != NULL)
+              RootMonitor::watcher->RemoveDirectory(nDirFd);
+            //удаляем элемент из очереди
+            if(pdleFirst == pdleList)
+              pdleFirst = pdleList->pdleNext;
+            delete pdleList;
+            pthread_mutex_unlock(&mListMutex);
+            return;
+        }
+        pdleList = pdleList->pdleNext;
     }
     pthread_mutex_unlock(&mListMutex);
 }
 
 //переименовать директорию
-void DescriptorsList::RenameQueueElement(FileData const * const in_pfdNewData)
+void DescriptorsList::RenameQueueElement(PCFILEDATA const in_pfdNewData)
 {
     DirListElement *pdleList;
 
@@ -157,14 +161,14 @@ void DescriptorsList::RenameQueueElement(FileData const * const in_pfdNewData)
     pdleList = pdleFirst;
     while(pdleList != NULL)
     {
-	if(pdleList->psdDirectory->GetFileData()->stData.st_ino == in_pfdNewData->stData.st_ino)
-	{
-	    //переименовываем директорию
-	    pdleList->psdDirectory->SetDirName(in_pfdNewData->pName);
-	    pthread_mutex_unlock(&mListMutex);
-	    return;
-	}
-	pdleList = pdleList->pdleNext;
+        if(strcmp(pdleList->psdDirectory->GetFileData()->szUuid, in_pfdNewData->szUuid) == 0)
+        {
+            //переименовываем директорию
+            pdleList->psdDirectory->SetDirName(in_pfdNewData->pName);
+            pthread_mutex_unlock(&mListMutex);
+            return;
+        }
+        pdleList = pdleList->pdleNext;
     }
     pthread_mutex_unlock(&mListMutex);
 }
@@ -176,8 +180,8 @@ int DescriptorsList::GetFd(void)
 
     if(pdleLast == NULL)
     {
-	pdleLast = pdleFirst;
-	return pdleFirst->psdDirectory->GetDirFd();
+        pdleLast = pdleFirst;
+        return pdleFirst->psdDirectory->GetDirFd();
     }
 
     pdleLast = pdleLast->pdleNext;
@@ -192,13 +196,13 @@ int DescriptorsList::GetFd(void)
 void DescriptorsList::PrintList(void)
 {
     DirListElement *pdleList;
-    FileData *pfdData;
+    PFILEDATA pfdData;
 
     //если список пуст - выходим
     if(pdleFirst == NULL)
     {
-	fprintf(stderr, "\nDescriptorsList::PrintList() : DirectoryList is empty!\n\n");
-	return;
+        fprintf(stderr, "\nDescriptorsList::PrintList() : DirectoryList is empty!\n\n");
+        return;
     }
 
     fprintf(stderr, "\nDescriptorsList::PrintList() : DirectoryList: начало списка.\n");
@@ -206,10 +210,10 @@ void DescriptorsList::PrintList(void)
     pdleList = pdleFirst;
     while(pdleList != NULL)
     {
-	pfdData = pdleList->psdDirectory->GetFileData();
-	if(pfdData != NULL)
-	  fprintf(stderr, "DescriptorsList::PrintList() : DirectoryList: файл %s, fd=%d, inode=%d.\n", pdleList->psdDirectory->GetDirName(), pdleList->psdDirectory->GetDirFd(), (int)pfdData->stData.st_ino);
-	pdleList = pdleList->pdleNext;
+        pfdData = pdleList->psdDirectory->GetFileData();
+        if(pfdData != NULL)
+          fprintf(stderr, "DescriptorsList::PrintList() : DirectoryList: файл %s, fd=%d, inode=%d.\n", pdleList->psdDirectory->GetDirName(), pdleList->psdDirectory->GetDirFd(), (int)pfdData->stData.st_ino);
+        pdleList = pdleList->pdleNext;
     }
     fprintf(stderr, "DescriptorsList::PrintList() : DirectoryList: конец списка.\n\n");
     pthread_mutex_unlock(&mListMutex);
@@ -220,80 +224,71 @@ void DescriptorsList::UpdateList(void)
     DirListElement *pdleList;
     char *pPath = NULL;
     int nDirFd;
-    FileData *pfdData;
+    PFILEDATA pfdData;
 
 //     fprintf(stderr, "DescriptorsList::UpdateList() : start\n"); //отладка!!!
     if(pdleFirst == NULL)
     {
-	fprintf(stderr, "DescriptorsList::UpdateList(): the list is empty!\n"); //отладка!!!
-	return;
+        fprintf(stderr, "DescriptorsList::UpdateList(): the list is empty!\n"); //отладка!!!
+        return;
     }
 //    pthread_mutex_lock(&mListMutex); (?)
     //ищем новые директории и обновляем их
     pdleList = pdleFirst;
     while(pdleList != NULL)
     {
-	if(pdleList->psdDirectory == NULL)
-	{
-	  fprintf(stderr, "DescriptorsList::UpdateList() Update: NULL!\n"); //отладка!!!
-	  continue;
-	}
-	pfdData = pdleList->psdDirectory->GetFileData();
-	//создаём слепки для новых директорий в списке
-	if(pdleList->psdDirectory != NULL && pdleList->psdDirectory->IsSnapshotNeeded() && pfdData != NULL)
-	{
-	    pdleList->psdDirectory->MakeSnapshot(true);
-	    //проверяем, открыта уже директория или ещё нет
-	    nDirFd = pfdData->nDirFd;
-	    if(nDirFd == -1) //отладка!!!
-	    {
-	      pPath = pdleList->psdDirectory->GetFullPath();
-	      if(pPath != NULL)
-	      {
-		//учесть при инкапсуляции (!)
-		pfdData->nDirFd = open(pPath, O_RDONLY);
-		delete [] pPath;
-	      }
-	    }
-	    nDirFd = pfdData->nDirFd;
-	    if(nDirFd >= 0)
-	    {
-		//назначаем обработчик сигнала для дескриптора
-		if(fcntl(nDirFd, F_SETSIG, SIGUSR1) != -1)
-		{
-		    if(fcntl(nDirFd, F_NOTIFY, DN_MODIFY|DN_CREATE|DN_DELETE|DN_RENAME/*|DN_ACCESS*/) == -1)
-		    {
-// 			struct stat st; //отладка!!!
-// 			fstat(nDirFd, &st); //отладка!!!
-// 			pPath = pdleList->psdDirectory->GetFullPath(); //отладка!!!
-// 			fprintf(stderr, "DescriptorsList::UpdateList() : \"%s\", fd=%d, st.st_ino=%d\n", pPath, nDirFd, (int)st.st_ino); //отладка!!!
-// 			if(pPath != NULL) //отладка!!!
-// 			  delete [] pPath; //отладка!!!
-			perror("DescriptorsList::UpdateList() ???невозможно назначить обработку для дескриптора");
-		    }
-
-		    //инициализацию первого элемента нужно проводить в конструкторе RootMonitor
-		    //добавление остальных файлов в конструкторе DirSnapshot (временно, т.к. там могут создаваться слепки в результате обработки сигналов)
-		    //если создаётся невременный слепок - это создание инициализирующего списка файлов (т.е. вызывать для инициализации надо в конструкторе слепка)
-		    //если происходит обработка сравнения слепков - это создание вторичного списка событий (т.е. вторичный список создаётся в обработчике сравнений слепков)
-		}
-		else
-		{
-		    perror("DescriptorsList::UpdateList(), fcntl");
-		    close(nDirFd);
-		    //учесть после инкапсуляции (!)
-		    pfdData->nDirFd = -1;
-		}
-	    }
-	}
-	else
-	{
-// 	  if(pdleList->psdDirectory->IsSnapshotNeeded())
-// 	    fprintf(stderr, "DescriptorsList::UpdateList() 3: no name or file data!\n");
-	}
-	pdleList = pdleList->pdleNext;
+        if(pdleList->psdDirectory == NULL)
+        {
+          fprintf(stderr, "DescriptorsList::UpdateList() Update: NULL!\n"); //отладка!!!
+          continue;
+        }
+        pfdData = pdleList->psdDirectory->GetFileData();
+        //создаём слепки для новых директорий в списке
+        if(pdleList->psdDirectory != NULL && pdleList->psdDirectory->IsSnapshotNeeded() && pfdData != NULL)
+        {
+            pdleList->psdDirectory->MakeSnapshot();
+            //проверяем, открыта уже директория или ещё нет
+            nDirFd = pfdData->nDirFd;
+            if(nDirFd == -1) //отладка!!!
+            {
+              pPath = pdleList->psdDirectory->GetFullPath();
+              if(pPath != NULL)
+              {
+                //учесть при инкапсуляции (!)
+                pfdData->nDirFd = open(pPath, O_RDONLY);
+                delete [] pPath;
+              }
+            }
+            nDirFd = pfdData->nDirFd;
+            if(nDirFd >= 0)
+            {
+                if(RootMonitor::watcher != NULL &&
+                   !RootMonitor::watcher->AddDirectory(pdleList->psdDirectory))
+                    fprintf(stderr, "Failed to watch directory: %s\n", pfdData->pName);
+            }
+        }
+        else
+        {
+//     	  if(pdleList->psdDirectory->IsSnapshotNeeded())
+//     	    fprintf(stderr, "DescriptorsList::UpdateList() 3: no name or file data!\n");
+        }
+        pdleList = pdleList->pdleNext;
     }
 //    pthread_mutex_unlock(&mListMutex); (?)
+}
+
+void DescriptorsList::CompareAll(const char *token)
+{
+    std::vector<int> descriptors;
+    for(DirListElement *element = pdleFirst; element != NULL; element = element->pdleNext)
+      if(element->psdDirectory != NULL && !element->psdDirectory->IsSnapshotNeeded())
+        descriptors.push_back(element->psdDirectory->GetDirFd());
+    for(int fd : descriptors)
+    {
+      SomeDirectory *directory = GetDirectory(fd);
+      if(directory != NULL && !directory->IsSnapshotNeeded())
+        directory->CompareSnapshots(token);
+    }
 }
 
 SomeDirectory *DescriptorsList::GetDirectory(int in_nFd)
@@ -306,9 +301,9 @@ SomeDirectory *DescriptorsList::GetDirectory(int in_nFd)
     pdleDir = pdleFirst;
     while(pdleDir != NULL)
     {
-	if(pdleDir->psdDirectory->GetDirFd() == in_nFd)
-	    return pdleDir->psdDirectory;
-	pdleDir = pdleDir->pdleNext;
+        if(pdleDir->psdDirectory->GetDirFd() == in_nFd)
+            return pdleDir->psdDirectory;
+        pdleDir = pdleDir->pdleNext;
     }
 
     return NULL;
@@ -316,14 +311,14 @@ SomeDirectory *DescriptorsList::GetDirectory(int in_nFd)
 
 /*********************************DirListElement*********************************/
 
-DirListElement::DirListElement()
+DIRLISTELEMENT::DirListElement()
 {
     psdDirectory = NULL;
     pdleNext = NULL;
     pdlePrev = NULL;
 }
 
-DirListElement::DirListElement(SomeDirectory *in_psdDirectory, DirListElement * const in_pdlePrev)
+DIRLISTELEMENT::DirListElement(SomeDirectory *in_psdDirectory, DirListElement * const in_pdlePrev)
 {
     psdDirectory = in_psdDirectory;
     pdlePrev = in_pdlePrev;
@@ -335,18 +330,18 @@ DirListElement::DirListElement(SomeDirectory *in_psdDirectory, DirListElement * 
         pdleNext = in_pdlePrev->pdleNext;
 	//если за предшествующим элементом есть последующий, меняем у последующего предыдущий на this
         if(in_pdlePrev->pdleNext != NULL)
-	    in_pdlePrev->pdleNext->pdlePrev = this;
-	in_pdlePrev->pdleNext = this;
+            in_pdlePrev->pdleNext->pdlePrev = this;
+        in_pdlePrev->pdleNext = this;
     }
     else
     {
-	pdleNext = NULL;
+        pdleNext = NULL;
     }
 }
 
-DirListElement::DirListElement(FileData *in_pfdData, SomeDirectory * const in_psdParent, DirListElement * const in_pdlePrev)
+DIRLISTELEMENT::DirListElement(PFILEDATA in_pfdData, SomeDirectory * const in_psdParent, DirListElement * const in_pdlePrev)
 {
-    //осторожно! Родительский каталог не ищется! Надо делать! Краш!!!
+    //осторожно! Родительский каталог не ищется! Надо делать! Краш!!! TODO: //
     psdDirectory = new SomeDirectory(in_pfdData, in_psdParent, true); //снимок обязан присутствовать в элементе очереди
     pdlePrev = in_pdlePrev;
     //исключаем выпадение части элементов списка
@@ -355,16 +350,16 @@ DirListElement::DirListElement(FileData *in_pfdData, SomeDirectory * const in_ps
         pdleNext = in_pdlePrev->pdleNext;
 	//если за предшествующим элементом есть последующий, меняем у последующего предыдущий на this
         if(in_pdlePrev->pdleNext != NULL)
-	    in_pdlePrev->pdleNext->pdlePrev = this;
-	in_pdlePrev->pdleNext = this;
+            in_pdlePrev->pdleNext->pdlePrev = this;
+        in_pdlePrev->pdleNext = this;
     }
     else
     {
-	pdleNext = NULL;
+        pdleNext = NULL;
     }
 }
 
-DirListElement::~DirListElement()
+DIRLISTELEMENT::~DirListElement()
 {
     //полностью удаляем директорию
     //FileData удаляется из своего слепка автоматически

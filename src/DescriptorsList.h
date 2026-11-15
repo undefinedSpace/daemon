@@ -7,46 +7,50 @@
 
 #include<stdio.h>
 #include<fcntl.h>
-#include<signal.h>
 #include<pthread.h>
 
 #include"DirSnapshot.h"
 #include"SomeDirectory.h"
 
-struct DirListElement
-{
-    SomeDirectory *psdDirectory;
-    DirListElement *pdleNext;
-    DirListElement *pdlePrev;
-
-    DirListElement();
-    DirListElement(SomeDirectory *in_psdDirectory, DirListElement * const in_pdlePrev);
-    DirListElement(FileData *in_pfdData, SomeDirectory * const in_psdParent, DirListElement * const in_pdlePrev);
-    ~DirListElement();
-};
-
 class DescriptorsList
 {
+public:
+    struct DirListElement
+    {
+	SomeDirectory *psdDirectory;
+        DirListElement *pdleNext;
+        DirListElement *pdlePrev;
+
+        DirListElement();
+        DirListElement(SomeDirectory *in_psdDirectory, DirListElement * const in_pdlePrev);
+        DirListElement(PFILEDATA in_pfdData, SomeDirectory * const in_psdParent, DirListElement * const in_pdlePrev);
+        ~DirListElement();
+    };
+
+private:
     DirListElement *pdleFirst;
     //блокировка доступа к списку директорий
     pthread_mutex_t mListMutex;
 public:
     DescriptorsList();
-    //для корневого каталога (возможно, тут нужен in_fSetSigHandler)
+    //для корневого каталога
     DescriptorsList(SomeDirectory *in_psdRootDirectory);
     //директория не обязана быть открытой перед помещением в очередь
-    DescriptorsList(FileData *in_psdDir);
+    DescriptorsList(PFILEDATA in_psdDir);
     ~DescriptorsList();
 
     void AddQueueElement(SomeDirectory * const in_psdPtr);
     void SubQueueElement(SomeDirectory const * const in_psdPtr);
     void SubQueueElement(int in_nDirFd);
-    void RenameQueueElement(FileData const * const in_pfdData);
+    void RenameQueueElement(PCFILEDATA const in_pfdData);
 
     void UpdateList(void);
+    void CompareAll(const char *token);
 
     int GetFd(void); //отладка!!!
     void PrintList(void); //отладка!!!
 
     SomeDirectory *GetDirectory(int in_nDirFd);
 };
+
+typedef DescriptorsList::DirListElement DIRLISTELEMENT;

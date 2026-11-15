@@ -8,21 +8,23 @@
 #include<stdio.h>
 #include<string.h>
 
-//поля текущей (обрабатываемой в данный момент) записи
-struct JSONField
-{
-    char *pcName;
-    char *pcValue;
-
-    JSONField *pjfNext;
-
-    JSONField(void);
-    JSONField(char * const in_pcName, char * const in_pcValue);
-    ~JSONField();
-};
-
 class JSONParser
 {
+public:
+    //поля текущей (обрабатываемой в данный момент) записи
+    struct JSONField
+    {
+	char *pcName;
+        char *pcValue;
+
+        JSONField *pjfNext;
+
+        JSONField(void);
+        JSONField(char * const in_pcName, char * const in_pcValue);
+	~JSONField();
+    };
+
+private:
     char *pcJSONRequest; //ссылка на массив с запросом в формате JSON
     long stStartPointer; //индекс начального элемента обрабатываемой области запроса
     long stEndPointer; //индекс конечного элемента обрабатываемой области запроса
@@ -45,3 +47,5 @@ public:
     //выделение и обработка всех записей запроса
     void ParseAllItems(void);
 };
+
+typedef JSONParser::JSONField JSONFIELD;

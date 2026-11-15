@@ -38,7 +38,7 @@ SomeDirectory::SomeDirectory(char const * const in_pName, SomeDirectory * const 
 
     //создаём описание корневой директории наблюдаемого проекта
     pPath = GetFullPath();
-    pfdData = new FileData(in_pName, pPath, NULL, false);
+    pfdData = new FILEDATA(in_pName, pPath, NULL, false);
     psdParent = in_pfdParent;
 
     if((pfdData->nDirFd = open(pPath, O_RDONLY)) < 0)
@@ -60,7 +60,7 @@ SomeDirectory::SomeDirectory(char const * const in_pName, SomeDirectory * const 
 //этот конструктор автоматически открывает директорию
 //и вешает обработчик сигнала на полученный дескриптор
 //слепок директории создаётся по запросу (?)
-SomeDirectory::SomeDirectory(FileData *in_pfdData, SomeDirectory * const in_pfdParent, bool in_fGetSnapshot)
+SomeDirectory::SomeDirectory(PFILEDATA in_pfdData, SomeDirectory * const in_pfdParent, bool in_fGetSnapshot)
 {
     char *pPath = NULL;
 
@@ -109,7 +109,7 @@ SomeDirectory::SomeDirectory(FileData *in_pfdData, SomeDirectory * const in_pfdP
 	//возможно, имеет смысл тут автоматом добавлять список директорий (?)
 	//открываем и назначаем обработчик дескриптора
 	//false - не запускать поток обработки списка директорий после создания слепка
-	MakeSnapshot(false);
+	MakeSnapshot();
     }
 }
 
@@ -204,7 +204,8 @@ char *SomeDirectory::GetFullPath(void)
 	strncat(pcBuff, pcRetName, sPathLength);
 
 	//обновляем возвращаемый путь
-	delete [] pcRetName;
+	if(pcRetName != NULL)
+	  delete [] pcRetName;
 	pcRetName = new char[sPathLength + 1];
 	memset(pcRetName, 0, sPathLength + 1);
 	strncpy(pcRetName, pcBuff, sPathLength);
@@ -222,33 +223,28 @@ SomeDirectory * const SomeDirectory::GetParent(void)
     return psdParent;
 }
 
-FileData *SomeDirectory::GetFileData(void)
+PFILEDATA SomeDirectory::GetFileData(void)
 {
     return pfdData;
 }
 
-void SomeDirectory::MakeSnapshot(bool in_fStartDirThread)
+void SomeDirectory::MakeSnapshot(void)
 {
     if(pdsSnapshot != NULL)
       delete pdsSnapshot;
     pdsSnapshot = new DirSnapshot((void *) this, true, true);
 //    pdsSnapshot->PrintSnapshot(); //отладка!!!
-    //освобождение мьютекса потока обработчика списка директорий (?)
-    //возможно, имеет смысл вручную запускать поток там, где это нужно,
-    //во избежании рекурсии (!)
-    if(in_fStartDirThread)
-      pthread_mutex_unlock(&(RootMonitor::mDirThreadMutex));
 }
 
 //сравнить слепки и обработать результат
 //это ключевая функция всей системы мониторинга
-void SomeDirectory::CompareSnapshots(void)
+void SomeDirectory::CompareSnapshots(const char * const in_pszToken)
 {
     char *pPath = NULL;
-    FileData *pfdCopy = NULL;
+    PFILEDATA pfdCopy = NULL;
     bool fSecondResult;
     DirSnapshot *pdsRemake = NULL;
-    SnapshotComparison scResult;
+    SNAPSHOTCOMPARISON scResult;
     SomeDirectory *psdNewDirectory = NULL;
     unsigned long ulSessionNumber;
 
@@ -267,6 +263,24 @@ void SomeDirectory::CompareSnapshots(void)
     //первый проход функции сравнения слепков
     fSecondResult = false;
     //производим сравнение
+    pdsSnapshot->CompareSnapshots(pdsRemake, false);
+
+    // Editors sometimes unlink and recreate a name in separate fanotify
+    // notifications. Wait briefly before committing a deletion so that the
+    // next snapshot can pair both physical objects at the same path.
+    bool hasDeletion = false;
+    pdsSnapshot->GetResult(&scResult);
+    while(scResult.rocResult != IS_EMPTY)
+    {
+      if(scResult.rocResult == IS_DELETED) hasDeletion = true;
+      pdsSnapshot->GetResult(&scResult);
+    }
+    if(hasDeletion)
+    {
+      usleep(200000);
+      delete pdsRemake;
+      pdsRemake = new DirSnapshot((void *) this, false, false);
+    }
     pdsSnapshot->CompareSnapshots(pdsRemake, false);
 
     //получаем первое отличие
@@ -309,10 +323,8 @@ void SomeDirectory::CompareSnapshots(void)
 	      RootMonitor::pdlList->AddQueueElement(psdNewDirectory);
 	      pthread_mutex_unlock(&(RootMonitor::mDescListMutex));
 
-	      //запускаем поток обработки списка директорий
-	      pthread_mutex_unlock(&(RootMonitor::mDirThreadMutex));
 	    }
-	    fprintf(stderr, "%s \"%s%s%s\" has been created.\n",
+        fprintf(stderr, "%s \"%s%s%s\" is created.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
 			      (pPath==NULL)?"":pPath,
 			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
@@ -320,11 +332,25 @@ void SomeDirectory::CompareSnapshots(void)
 	    if(pPath != NULL)
 	      delete [] pPath;
 	    //добавляем запись в список событий
-	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), IS_CREATED);
+        rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), IS_CREATED, in_pszToken);
+	    break;
+	  case IS_REPLACED:
+	    // Copy the UUID before removing the old snapshot entry.
+	    if(scResult.pfdReplaced != NULL)
+	    {
+	      char oldUuid[37];
+	      memcpy(oldUuid, scResult.pfdReplaced->szUuid, sizeof(oldUuid));
+	      pPath = GetFullPath();
+	      pdsSnapshot->SubFile(scResult.pfdReplaced->pName);
+	      pdsSnapshot->AddFile(scResult.pfdData, pPath, true);
+	      delete [] pPath;
+	      rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData,
+	                           GetFileData(), IS_REPLACED, oldUuid);
+	    }
 	    break;
 	  case IS_DELETED:
 	    pPath = GetFullPath();
-	    fprintf(stderr, "%s \"%s%s%s\" (inode=%d) has been deleted.\n",
+        fprintf(stderr, "%s \"%s%s%s\" (inode=%d) is deleted.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
 			      (pPath==NULL)?"":pPath,
 			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
@@ -333,7 +359,7 @@ void SomeDirectory::CompareSnapshots(void)
 	    if(pPath != NULL)
 	      delete [] pPath;
 	    //добавляем запись в список событий
-	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), IS_DELETED);
+    	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), IS_DELETED, in_pszToken);
 	    //если это директория - удаляем из списка директорий
 	    //из слепка он при этом удалится автоматом
 	    if(scResult.pfdData->nType==IS_DIRECTORY)
@@ -352,7 +378,7 @@ void SomeDirectory::CompareSnapshots(void)
 	    break;
 	  case NEW_NAME:
 	    pPath = GetFullPath();
-	    fprintf(stderr, "Some file has been renamed to \"%s%s%s\".\n",
+        fprintf(stderr, "Some file is renamed to \"%s%s%s\".\n",
 			    (pPath==NULL)?"":pPath,
 			    (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
 			    scResult.pfdData->pName); //отладка!!!
@@ -361,11 +387,11 @@ void SomeDirectory::CompareSnapshots(void)
 	    //переимновываем файл
 	    pdsSnapshot->RenameFile(scResult.pfdData);
 	    //добавляем запись в список событий
-	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), NEW_NAME);
+        rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), NEW_NAME, NULL);
 	    break;
 	  case NEW_TIME:
 	    pPath = GetFullPath();
-	    fprintf(stderr, "A time of file \"%s%s%s\" has been changed.\n", (pPath==NULL)?"":pPath, (pPath==NULL)?"":"/", scResult.pfdData->pName); //отладка!!!
+        fprintf(stderr, "A time of file \"%s%s%s\" is changed.\n", (pPath==NULL)?"":pPath, (pPath==NULL)?"":"/", scResult.pfdData->pName); //отладка!!!
 	    //scResult.pfdData содержит данные изменившегося файла. Всё, кроме хэша
 	    scResult.pfdData->CalcHash(pPath);
 	    if(pPath != NULL)
@@ -376,11 +402,11 @@ void SomeDirectory::CompareSnapshots(void)
 	    //если же это директория - переоткрываем, вешаем обработчик
 	    //...
 // 	    //добавляем запись в список событий
-// 	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, NEW_TIME, GetFileData()->stData.st_ino);
+// 	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, NEW_TIME, GetFileData()->stData.st_ino, NULL);
 	    break;
 	  case NEW_HASH:
 	    pPath = GetFullPath();
-	    fprintf(stderr, "%s \"%s%s%s\" (inode=%d) has been changed.\n",
+        fprintf(stderr, "%s \"%s%s%s\" (inode=%d) is changed.\n",
 			      (scResult.pfdData->nType==IS_DIRECTORY)?"Directory":"File",
 			      (pPath==NULL)?"":pPath,
 			      (pPath==NULL||( (strlen(pPath) > 0) && (pPath[strlen(pPath)-1] == '/') ))?"":"/",
@@ -396,7 +422,7 @@ void SomeDirectory::CompareSnapshots(void)
 	    if(pPath != NULL)
 	      delete [] pPath;
 	    //добавляем запись в список событий
-	    rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), NEW_HASH);
+        rmProject->AddChange(CURRENT_SERVICE, ulSessionNumber, scResult.pfdData, GetFileData(), NEW_HASH, NULL);
 	    break;
 	  case IS_EQUAL:
 	    break;

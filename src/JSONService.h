@@ -6,6 +6,7 @@
 #pragma once
 
 #include<time.h>
+#include<math.h>
 #include<stdio.h>
 #include<pthread.h>
 
@@ -18,7 +19,7 @@ enum ServiceType {NOT_READY = -1, NO_SERVICE = 0, INIT_SERVICE, CURRENT_SERVICE}
 //при дальнейших изменениях в файлах они передаются одним длинным списком
 struct FSChange
 {
-  FileData *pfdFile; //ссылка на описание файла, который изменился (может быть NULL, если удалён)
+  PFILEDATA pfdFile; //ссылка на описание файла, который изменился (может быть NULL, если удалён)
   ResultOfCompare rocEvent; //событие (IS_EQUAL в случае первой инициализации)
   int nType; //тип файла
   ino_t itInode; //inode текущего файла
@@ -28,7 +29,7 @@ struct FSChange
   FSChange *pfscNext; //ссылка на описание изменения в следующем файле
 
   FSChange();
-  FSChange(ServiceType in_stType, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent, FSChange * const in_pfscPrev);
+  FSChange(ServiceType in_stType, PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent, ResultOfCompare in_rocEvent, FSChange * const in_pfscPrev, const char * const in_pszToken);
   ~FSChange();
 };
 
@@ -49,9 +50,9 @@ public:
   ~JSONService();
 
   //добавить изменения в список
-  void AddChange(ServiceType in_stType, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent);
+  void AddChange(ServiceType in_stType, PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent, ResultOfCompare in_rocEvent, const char * const in_pszToken);
   //заменить уже существующую запись об изменениях в списке
-  void UpdateChange(ServiceType in_stType, FileData * const in_pfdFile, ResultOfCompare in_rocEvent);
+  void UpdateChange(ServiceType in_stType, PFILEDATA const in_pfdFile, ResultOfCompare in_rocEvent);
   char * const GetJSON(void); //получить список в формате JSON (полученную строку надо удалить после использования)
 
   unsigned long GetSessionNumber(void); //получить номер сессии сервиса

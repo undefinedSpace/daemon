@@ -1,62 +1,60 @@
-//File Status by Bombo
+//undefined by Bombo
 //10.01.2017
 
-//потоки:
-//1 - поток обработки ОЧЕРЕДИ дескрипторов, созданной из обработчика сигнала, стартует с этим приложением
-//2 - потоки добавления дескрипторов в очередь на обработку, запускаемые из обработчика сигнала
-//3 - поток обработки СПИСКА открытых директорий (дескрипторов), стартует вместе с этим приложением
+// Filesystem events are read from fanotify; directory snapshots determine changes.
 
 #include<stdio.h>
 #include<fcntl.h>
 #include<unistd.h>
 #include<string.h>
-#include<signal.h>
 #include<dirent.h> //opendir(), readdir()
 #include<stdlib.h>
 #include<pthread.h>
 #include<sys/time.h>
 #include<sys/stat.h>
 #include<sys/types.h>
+#include<arpa/inet.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
 #include<sys/select.h>
-#include<sys/resource.h>
 
 #include"RootMonitor.h"
+#include"SimpleSemantic.h"
+#include"FileUuid.h"
+#include"FileLimit.h"
 
-#define THREAD_SLEEP_TIME 0
+#define PORT_NUMBER 44553
+#define SOCKET_READ_SIZE 102400
+#define MESSAGE_BUFF_SIZE 20480000
 
 RootMonitor *rmProject;
 
 void StartSomeThread(unsigned long in_ulStack, void *(* in_FunctionName)(void *), void *in_pvArg);
-void sig_handler(int nsig, siginfo_t *siginfo, void *context);
-void *fd_queue_thread(void *arg);
-void *file_thread(void *arg);
+void *fanotify_thread(void *);
 void *directory_thread(void *arg);
 void *send_json_thread(void *arg);
+void *server_thread(void *arg);
 
 int main(int argc, char *argv[])
 {
   int i;
   char filename[256];
+  char rootUuid[37];
   struct stat st;
-  sigset_t set;
-  struct sigaction signal_data;
-  rlimit r;
-  JSONParser *jp = new JSONParser();
+  JSONParser *jp;
 
+  if(!ConfigureOpenFileLimit())
+    return 1;
+
+  //запускаем сервер
+  StartSomeThread(1024000L, server_thread, NULL);
+  usleep(1000000);
+
+  jp = new JSONParser();
 //  fprintf(stderr, "DEBUG!!!\n");
   jp->CheckRequest();
 //  return 0;
 
-  //увеличиваем лимит открытых файлов для текущего процесса
-  r.rlim_cur = 8192;
-  r.rlim_max = 8192;
-  if(setrlimit(RLIMIT_NOFILE, &r) < 0)
-    perror("main(), setrlimit error:");
-  getrlimit(RLIMIT_NOFILE, &r);
-  fprintf(stderr, "main() : nofile limits: rlim_cur=%ld, rlim_max=%ld\n", r.rlim_cur, r.rlim_max);
-
-  pthread_mutex_unlock(&(RootMonitor::mDescListMutex));
-  pthread_mutex_unlock(&(RootMonitor::mDescQueueMutex));
   pthread_mutex_lock(&(RootMonitor::mSendJSONThreadMutex));
 
   //проверяем количество аргументов
@@ -66,20 +64,9 @@ int main(int argc, char *argv[])
     return -1;
   }
 
-  //обнуляем описание сигнала
-  memset(&signal_data, 0, sizeof(signal_data));
-  //назначаем обработчик сигнала
-  signal_data.sa_sigaction = &sig_handler;
-  //сопровождаем сигнал дополнительной информацией
-  signal_data.sa_flags = SA_SIGINFO;
-  //обнуляем маску блокируемых сигналов
-  sigemptyset(&set);
-  //добавляем блокировку обработки SIGUSR1
-  //sigaddset(&set, SIGUSR1);
-  //инициализируем маску
-  signal_data.sa_mask = set;
-  if(sigaction(SIGUSR1, &signal_data, NULL) < 0)
-    fprintf(stderr, "sigaction(): can not activate signal\n");
+  RootMonitor::watcher = new FanotifyWatcher();
+  if(!RootMonitor::watcher->IsReady())
+    return 1;
 
   for(i = 0; i < argc-2; ++i)
   {
@@ -89,41 +76,49 @@ int main(int argc, char *argv[])
     strncpy(filename, argv[i+1], sizeof(filename));
     if(filename[0] != '/')
     {
-      fprintf(stderr, "main() wrong path: A path to project directory must be full! (\"%s\")\n", filename);
+      fprintf(stderr, "main() wrong path: The path to project directory must be started from root! (\"%s\")\n", filename);
       continue;
     }
 
+    if(stat(filename, &st) != 0 || !S_ISDIR(st.st_mode) ||
+       !EnsureFileUuid(filename, rootUuid))
+    {
+      fprintf(stderr, "Cannot monitor directory or store its UUID: %s\n", filename);
+      continue;
+    }
     //пытаемся открыть файл
     rmProject = new RootMonitor(filename);
-    stat(filename, &st);
     fprintf(stderr, "Project path: \"%s\", inode=%ld, mode=%d, DIR=%d\n", filename, st.st_ino, st.st_mode & S_IFDIR, S_IFDIR);
     break;
   }
 
+  if(rmProject == NULL)
+    return 1;
+
   fprintf(stderr, "Server URL: %s\n", argv[argc-1]);
   rmProject->SetServerURL(argv[argc-1]);
 
-  //запускаем поток обработки сигнала
-  StartSomeThread(102400L, file_thread, NULL);
-
   //запускаем поток обработки списка найденных директорий
   StartSomeThread(102400L, directory_thread, NULL);
+
+  // Read filesystem events only after the initial directory scan has started.
+  StartSomeThread(102400L, fanotify_thread, NULL);
 
   //запускаем поток отправки JSON-сообщений серверу
   StartSomeThread(102400L, send_json_thread, NULL);
 
   usleep(2000000); //отладка!!!
-  char *list; //отладка!!!
-  list = rmProject->GetJSON(rmProject->GetLastSessionNumber()); //отладка!!!
-  fprintf(stderr, "%s\n", (list==NULL)?"NULL":list); //отладка!!!
-  if(list != NULL) //отладка!!!
-    delete [] list; //отладка!!!
+//  char *list; //отладка!!!
+//  list = rmProject->GetJSON(rmProject->GetLastSessionNumber()); //отладка!!!
+//  fprintf(stderr, "%s\n", (list==NULL)?"NULL":list); //отладка!!!
+//  if(list != NULL) //отладка!!!
+//    delete [] list; //отладка!!!
 
   rmProject->SendChangesToServer(); //отладка!!!
 
   for(;;)
   {
-    usleep(70000000);
+    usleep(700000);
   }
 
   return 0;
@@ -141,102 +136,10 @@ void StartSomeThread(unsigned long in_ulStack, void *(* in_FunctionName)(void *)
   pthread_attr_destroy(&paAttr);
 }
 
-//обработчик сигнала об изменении в некотором файле
-void sig_handler(int nsig, siginfo_t *siginfo, void *context)
+void *fanotify_thread(void *)
 {
-  int *pFd;
-
-  switch(nsig)
-  {
-    case SIGUSR1:
-      {
-        //готовим параметр для передачи в поток
-        pFd = new int(siginfo->si_fd); //выделяем память для параметра
-        //создаём поток постановки дескриптора на обработку
-        StartSomeThread(102400L, fd_queue_thread, (void *)pFd);
-      }
-      break;
-  }
-}
-
-//поток постановки дескриптора в очередь на обработку
-//поскольку таких потоков может породиться много за короткое время,
-//сама обработка происходит в другом потоке
-void *fd_queue_thread(void *arg)
-{
-  int nFd;
-
-  nFd = *((int *) arg);
-
-  delete (int *)arg; //освобождаем ранее выделенную для параметра память
-
-  if(RootMonitor::pdqQueue != NULL)
-    RootMonitor::pdqQueue->AddDescriptor(nFd);
-  else
-  {
-    fprintf(stderr, "очередь ещё не инициализирована!\n");
-    pthread_exit(NULL);
-  }
-
-  //сообщаем о новом сигнале обработчику
-  pthread_mutex_unlock(&(RootMonitor::mDescThreadMutex));
-  pthread_exit(NULL);
-}
-
-//поток обработки очереди дескрипторов
-void *file_thread(void *arg)
-{
-  int nFd;
-  SomeDirectory *psdDir;
-
-  for(;;)
-  {
-    //чуть притормозим
-    if(THREAD_SLEEP_TIME)
-      usleep(THREAD_SLEEP_TIME);
-    pthread_mutex_lock(&(RootMonitor::mDescThreadMutex));
-    pthread_mutex_lock(&(RootMonitor::mDescQueueMutex)); //очередь обрабатываемых дескрипторов
-    //удаление дескриптора из очереди дескрипторов
-    if(RootMonitor::pdqQueue != NULL)
-    {
-      nFd = RootMonitor::pdqQueue->GetDescriptor();
-      while(nFd != -1)
-      {
-        //сравнение слепков директорий
-        psdDir = RootMonitor::pdlList->GetDirectory(nFd);
-        if(psdDir != NULL)
-          psdDir->CompareSnapshots();
-        else
-          fprintf(stderr, "fd_queue_thread() : No such directory!\n");
-
-        if(nFd >= 0)
-        {
-          //после обработки сигнала обработчик сбрасывается на тот, что был по умолчанию
-          //поэтому здесь обновляем обработчик сигнала для дескриптора
-          //вешаем сигнал на дескриптор
-          //возможно, имеет смысл убрать это обновление в метод класса DecriptorsQueue или DescriptorsList
-          if(fcntl(nFd, F_SETSIG, SIGUSR1) < 0)
-          {
-            perror("fcntl");
-            close(nFd);
-            fprintf(stderr, "Can not init signal for fd\n");
-            continue;
-          }
-          //устанавливаем типы оповещений
-          if(fcntl(nFd, F_NOTIFY, DN_MODIFY|DN_CREATE|DN_DELETE|DN_RENAME/*|DN_ACCESS*/) < 0)
-          {
-            perror("fcntl");
-            close(nFd);
-            fprintf(stderr, "Can not set types for the signal\n");
-            continue;
-          }
-        }
-        nFd = RootMonitor::pdqQueue->GetDescriptor();
-      }
-    }
-    pthread_mutex_unlock(&(RootMonitor::mDescQueueMutex)); //освобождение очереди дескрипторов
-  }
-  pthread_exit(NULL);
+  RootMonitor::watcher->Run();
+  return NULL;
 }
 
 //поток обработки списка найденных директорий
@@ -244,12 +147,11 @@ void *directory_thread(void *arg)
 {
   for(;;)
   {
-    pthread_mutex_lock(&(RootMonitor::mDirThreadMutex));
-    //обработка списка директорий
-    RootMonitor::pdlList->UpdateList();
-    //  	RootMonitor::pdlList->PrintList();
-    if(THREAD_SLEEP_TIME)
-      usleep(THREAD_SLEEP_TIME);
+    pthread_mutex_lock(&(RootMonitor::mScanMutex));
+    if(RootMonitor::pdlList != NULL)
+      RootMonitor::pdlList->UpdateList();
+    pthread_mutex_unlock(&(RootMonitor::mScanMutex));
+    usleep(100000);
   }
   pthread_exit(NULL);
 }
@@ -261,6 +163,76 @@ void *send_json_thread(void *)
     pthread_mutex_lock(&(RootMonitor::mSendJSONThreadMutex));
     if(rmProject != NULL)
       rmProject->SendChangesToServer();
+  }
+  pthread_exit(NULL);
+}
+
+//основной поток сервера
+void *server_thread(void *arg)
+{
+  struct sockaddr_in addr, addr_client;
+  int sServerSocket, sInSocket;
+  DaemonSemanticData dsdData;
+  ssize_t sstSize, sstLen;
+  char *pbBuff, *pbPtr;
+  socklen_t slLen;
+  int nValue;
+
+  fprintf(stderr, "Start server.\n");
+  sServerSocket = socket(AF_INET, SOCK_STREAM, 0);
+  if(sServerSocket <= 0)
+  {
+    perror("server_thread() socket() error");
+    pthread_exit(NULL);
+  }
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(PORT_NUMBER);
+
+  nValue = 1;
+  setsockopt(sServerSocket, SOL_SOCKET, SO_REUSEADDR, &nValue, sizeof(int));
+
+  if(bind(sServerSocket, (struct sockaddr *) &addr, sizeof(addr)) < 0)
+  {
+    close(sServerSocket);
+    perror("server_thread() bind() error");
+    pthread_exit(NULL);
+  }
+  if(listen(sServerSocket, 50) < 0)
+  {
+    close(sServerSocket);
+    perror("server_thread() listen() error");
+    pthread_exit(NULL);
+  }
+  for(;;)
+  {
+    //fprintf(stderr, "ok!\n"); //debug!!!
+    sInSocket = accept(sServerSocket, (struct sockaddr *)&addr_client, &slLen);
+    if(sInSocket < 0)
+    {
+      perror("server_thread() accept() error");
+      continue;
+    }
+    sstLen = 0L;
+    pbBuff = new char[MESSAGE_BUFF_SIZE];
+    memset(pbBuff, 0, MESSAGE_BUFF_SIZE);
+//    sstSize = read(sInSocket, pbBuff+sstLen, 10240000);
+    do {
+      sstSize = read(sInSocket, pbBuff+sstLen, SOCKET_READ_SIZE);
+      sstLen = sstSize + sstLen;
+      fprintf(stderr, "read=%ld bytes, sstLen=%ld, SOCKET_READ_SIZE=%d, MESSAGE_BUFF_SIZE=%d\n", (long int)sstSize, sstLen, SOCKET_READ_SIZE, MESSAGE_BUFF_SIZE);
+    }
+    while(sstSize > 0 && sstSize <= SOCKET_READ_SIZE && sstLen < MESSAGE_BUFF_SIZE); //(?)
+    close(sInSocket);
+    //fprintf(stderr, "in_port=%d, buff:%s\n", htons(addr_client.sin_port), pbBuff); //отладка!!!
+    pbPtr = strstr(pbBuff, "\r\n\r\n");
+    if(pbPtr != NULL)
+    {
+      //fprintf(stderr, "%s\n", inet_ntoa(addr_client.sin_addr)); //debug!!!
+      dsdData.Analyze(inet_ntoa(addr_client.sin_addr), pbPtr);
+    }
+    delete [] pbBuff;
+    //fprintf(stderr, "clear\n"); //debug!!!
   }
   pthread_exit(NULL);
 }

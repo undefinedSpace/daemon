@@ -5,22 +5,24 @@
 
 #pragma once
 
+#include<math.h>
 #include<netdb.h>
 #include<fcntl.h>
 #include<stdio.h>
 #include<string.h>
 #include<unistd.h>
+#include<stdlib.h>
 #include<pthread.h>
 #include<sys/stat.h>
 #include<sys/types.h>
 #include<sys/socket.h>
 
-#include"DescriptorsQueue.h"
 #include"DescriptorsList.h"
 #include"SomeDirectory.h"
 #include"DirSnapshot.h"
 #include"JSONService.h"
 #include"JSONParser.h"
+#include"FanotifyWatcher.h"
 
 //все потоки обработчиков дескрипторов обращаются только к объекту этого класса (?)
 class RootMonitor
@@ -42,32 +44,32 @@ class RootMonitor
     pthread_mutex_t mEventsQueueMutex; //блокировка списка событий
 
 public:
+    //токен проекта
+    static char *pszToken;
     //список всех дескрипторов открытых директорий отслеживаемого проекта
     static DescriptorsList *pdlList;
-    //список дескрипторов, ожидающих обработки
-    static DescriptorsQueue *pdqQueue;
+    static FanotifyWatcher *watcher;
+    static pthread_mutex_t mScanMutex;
 
-    //блокировки доступа к списку директорий и очереди декрипторов на обработку
+    //блокировка доступа к списку директорий
     static pthread_mutex_t mDescListMutex;
-    static pthread_mutex_t mDescQueueMutex;
-    //блокировка потока обработчика списка найденных директорий
-    static pthread_mutex_t mDirThreadMutex;
-    //блокировка потока обработки очереди дескрипторов
-    static pthread_mutex_t mDescThreadMutex;
     //блокировка потока отправки JSON на сервер
     static pthread_mutex_t mSendJSONThreadMutex;
 
 public:
     RootMonitor();
     RootMonitor(char * const in_pRootPath);
-    RootMonitor(FileData * const in_pfdData);
+    RootMonitor(PFILEDATA const in_pfdData);
     RootMonitor(SomeDirectory * const in_psdRootDirectory);
     ~RootMonitor();
 
+    //инициализировать токен
+    void InitToken(void);
+
     //добавить изменение в список
-    void AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, FileData * const in_pfdFile, FileData const * const in_pfdParent, ResultOfCompare in_rocEvent);
+    void AddChange(ServiceType in_stType, unsigned long in_ulSessionNumber, PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent, ResultOfCompare in_rocEvent, const char * const in_pszToken);
     //добавить изменение в инициализирующий список
-    void AddInitChange(FileData * const in_pfdFile, FileData const * const in_pfdParent);
+    void AddInitChange(PFILEDATA const in_pfdFile, PCFILEDATA const in_pfdParent);
     //добавить новый список изменений
     void AddJSONService(ServiceType in_stType, unsigned long in_ulSessionNumber);
     //получить готовый запрос в формате JSON
